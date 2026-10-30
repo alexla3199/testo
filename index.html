@@ -249,6 +249,30 @@ button, .key, .seg, .tab { touch-action: manipulation; -webkit-tap-highlight-col
   .view.practice .status .big { font-size: 17px; }
 }
 
+/* ===== Tasto 3: aufgeräumte Bedienung ===== */
+.status { min-height: 40px; padding: 4px 12px; }
+.status .big { font-size: 19px; }
+.status .meter { width: 36px; }
+.transport { display: flex; align-items: center; gap: 8px; }
+.seg.modes { flex: 1; min-width: 0; }
+.seg.modes button { flex: 1; min-height: 40px; padding: 0 8px; }
+.go { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 46px; min-width: 46px; padding: 0 16px; border: 0; border-radius: 23px; background: var(--accent); color: var(--accent-ink); font-weight: 700; flex: none; }
+.go svg { width: 18px; height: 18px; }
+.go.stop { background: var(--bad); color: #fff; }
+.optbtn { position: relative; width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.optbtn.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.optbtn .badge { position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--hand-l); box-shadow: 0 0 0 2px var(--surface); }
+.ctrl { gap: 14px; }
+.sheetbox.opts .optrow .ol { width: 100%; }
+.optrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.optrow .ol { width: 78px; flex: none; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.optrow .row { flex-wrap: nowrap; }
+.kbwrap.narrow .key .lbl { display: none; }
+.kbwrap.narrow .key.w { border-radius: 0 0 3px 3px; }
+.view.practice { gap: 8px; }
+@media (max-width: 380px) { .optrow .ol { width: 100%; } .go span { display: none; } .go { padding: 0; width: 46px; } }
+@media (orientation: landscape) and (max-height: 520px) { .optrow .ol { width: 100%; } }
+
 </style>
 <div id="app"></div>
 <script>
@@ -1518,6 +1542,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   /* ================= Einstellungen ================= */
   var S = { a4: 440, labels: 'c', tapSound: true, vol: 0.85, sens: 0, clickVol: 0.6, kbSize: 'm', pps: 150, accomp: true, trainer: true, apiKey: '', apiModel: 'claude-sonnet-5-5', focus: false, view: 'notes', introSeen: false };
   try { Object.assign(S, JSON.parse(localStorage.getItem('ks-settings') || '{}')); } catch (e) { /* kein Speicher */ }
+  if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
   /* ================= Umgebung ================= */
@@ -1792,9 +1817,10 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Keyboard.prototype.setRange = function (lo, hi) {
     this.lo = lo; this.hi = hi; clear(this.inner); this.keys = {}; this.pos = {};
     this.wrap.setAttribute('data-size', S.kbSize);
-    var nW = 0, m, minW = S.kbSize === 's' ? 19 : S.kbSize === 'l' ? 38 : 27;
+    var nW = 0, m, minW = S.kbSize === 'fit' ? 10 : S.kbSize === 's' ? 19 : S.kbSize === 'l' ? 38 : 27;
     for (m = lo; m <= hi; m++) if (!PC.isBlack(m)) nW++;
-    var avail = this.scroller.clientWidth || 340, kw = clamp(Math.floor(avail / nW), minW, 64);
+    var avail = this.scroller.clientWidth || 340, kw = clamp(S.kbSize === 'fit' ? avail / nW : Math.floor(avail / nW), minW, 64);
+    this.wrap.classList.toggle('narrow', kw < 22);
     this.kw = kw; this.inner.style.width = (nW * kw) + 'px';
     var w0 = PC.whiteIndex(lo), bw = Math.round(kw * 0.62);
     for (m = lo; m <= hi; m++) {
@@ -2425,9 +2451,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     view.appendChild(el('div', { class: 'bar' }, [
       ibtn('back', 'Zur Bibliothek', function () { showLibrary(); }),
       el('h1', { text: piece.title || 'Ohne Titel' }),
-      ibtn('restart', 'Von vorn', function () { restart(); }),
-      ibtn('edit', 'Bearbeiten', function () { persist(); showEditor(piece); }),
-      ibtn('gear', 'Einstellungen', function () { openSettings(relayout); })
+      ibtn('more', 'Mehr', function () { practiceMenu(); })
     ]));
 
     /* --- Blatt --- */
@@ -2468,11 +2492,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
 
     /* --- Statusfeld und Bedienung --- */
     var dot = el('span', { class: 'dot', 'aria-hidden': 'true' }), big = el('div', { class: 'big', 'aria-live': 'polite' }), sub = el('div', { class: 'sub' });
-    var focusBtn = el('button', { class: 'ibtn sm', 'aria-label': 'Bedienung ein- oder ausklappen', onclick: function () { S.focus = !S.focus; saveSettings(); renderFocus(); } });
-    var status = el('div', { class: 'status' }, [dot, big, sub, focusBtn]);
-    var ctrl = el('div', { class: 'ctrl' });
-    var panel = el('div', { class: 'panel' }, [status, ctrl]);
-    function renderFocus() { ctrl.hidden = !!S.focus; clear(focusBtn); focusBtn.appendChild(icon(S.focus ? 'chevu' : 'chevd')); if (notation && !paneN.hidden) setTimeout(function () { notation.render(); }, 30); }
+    var meterBar = el('i'), meter = el('span', { class: 'meter', hidden: true, 'aria-hidden': 'true' }, [meterBar]);
+    var status = el('div', { class: 'status' }, [dot, big, meter, sub]);
     function segment(items, get, set, extra) {
       var box = el('div', { class: 'seg', role: 'group' });
       items.forEach(function (it) {
@@ -2482,29 +2503,69 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       function sync() { Array.prototype.forEach.call(box.children, function (b, i) { b.setAttribute('aria-pressed', get() === items[i].v ? 'true' : 'false'); }); }
       box.sync = sync; return box;
     }
-    var modeSeg = segment([{ v: 'wait', t: 'Warten', title: 'Der Cursor wartet, bis du den richtigen Ton spielst' }, { v: 'play', t: 'Mitspielen', title: 'Im Tempo mit Zähleinsatz spielen' }, { v: 'demo', t: 'Zuhören', title: 'Das Stück vorspielen lassen' }], function () { return st.mode; }, setMode);
-    var goBtn = el('button', { class: 'btn primary', onclick: onGo });
-    ctrl.appendChild(el('div', { class: 'row' }, [modeSeg, el('span', { style: 'flex:1' }), goBtn]));
+    var modeSeg = segment([{ v: 'wait', t: 'Üben', title: 'Tasto wartet, bis du den richtigen Ton spielst' }, { v: 'play', t: 'Im Takt', title: 'Im Tempo mit Einzählen spielen' }, { v: 'demo', t: 'Hören', title: 'Das Stück vorspielen lassen' }], function () { return st.mode; }, setMode);
+    modeSeg.classList.add('modes');
+    var goBtn = el('button', { class: 'go', onclick: onGo });
+    var optBtn = el('button', { class: 'optbtn', 'aria-label': 'Optionen', 'aria-expanded': 'false', onclick: openOpts }, [icon('gear'), el('span', { class: 'badge', hidden: true })]);
     var handSeg = segment([{ v: 'R', t: 'Rechts', cls: 'r' }, { v: 'L', t: 'Links', cls: 'l' }, { v: 'RL', t: 'Beide' }], function () { return st.hands; }, setHands);
     var tempoOut = el('output', { 'aria-live': 'polite' });
     var tempoStep = el('div', { class: 'step', role: 'group', 'aria-label': 'Tempo' }, [
       el('button', { 'aria-label': 'Langsamer', text: '−', onclick: function () { setPct(st.pct - 5); } }), tempoOut,
       el('button', { 'aria-label': 'Schneller', text: '+', onclick: function () { setPct(st.pct + 5); } })]);
-    ctrl.appendChild(el('div', { class: 'row' }, [handSeg, tempoStep]));
-    var metroBtn = el('button', { class: 'toggle', 'aria-pressed': 'false', onclick: function () { st.metro = !st.metro; metroBtn.setAttribute('aria-pressed', st.metro); } }, [icon('metro'), 'Metronom']);
-    var meterBar = el('i'), meter = el('span', { class: 'meter', hidden: true, 'aria-hidden': 'true' }, [meterBar]);
+    var metroBtn = el('button', { class: 'toggle', 'aria-pressed': 'false', onclick: function () { st.metro = !st.metro; metroBtn.setAttribute('aria-pressed', st.metro); renderFocusBadge(); } }, [icon('metro'), 'Metronom']);
     var inputSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Eingabe' });
     var inBtns = {};
-    [['tap', 'Tasten', 'keys'], ['mic', 'Mikro', 'mic'], ['midi', 'MIDI', 'midi']].forEach(function (a) {
+    [['tap', 'Bildschirm'], ['mic', 'Mikro'], ['midi', 'MIDI']].forEach(function (a) {
       if (a[0] === 'midi' && !navigator.requestMIDIAccess) return;
       var b = el('button', { 'aria-pressed': a[0] === 'tap' ? 'true' : 'false', title: a[0] === 'mic' ? 'Mit dem Mikrofon auf dein Klavier hören' : a[0] === 'midi' ? 'Digitalpiano per USB oder Bluetooth' : 'Auf der Bildschirm-Klaviatur spielen', onclick: function () { setInput(a[0]); } }, [a[1]]);
       inBtns[a[0]] = b; inputSeg.appendChild(b);
     });
-    ctrl.appendChild(el('div', { class: 'row' }, [metroBtn, inputSeg, meter]));
+    function optRow(label, ctl) { return el('div', { class: 'optrow' }, [el('span', { class: 'ol', text: label }), ctl]); }
+    var ctrl = el('div', { class: 'ctrl' }, [
+      optRow('Hände', handSeg), optRow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), optRow('Hören über', inputSeg)
+    ]);
+    var bar = el('div', { class: 'transport' }, [modeSeg, goBtn, optBtn]);
+    var panel = el('div', { class: 'panel' }, [status, bar]);
+    function openOpts() {
+      optBtn.setAttribute('aria-expanded', 'true');
+      overlay(function (box, close) {
+        box.classList.add('opts');
+        box.appendChild(el('h2', { text: 'Übungsoptionen' }));
+        box.appendChild(ctrl);
+        box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn primary', text: 'Fertig', onclick: close })]));
+      }, function () { optBtn.setAttribute('aria-expanded', 'false'); if (ctrl.parentNode) ctrl.parentNode.removeChild(ctrl); renderFocusBadge(); });
+    }
+    function renderFocus() {
+      status.hidden = S.showStatus === false;
+      renderFocusBadge();
+      if (notation && !paneN.hidden) setTimeout(function () { notation.render(); }, 30);
+    }
+    function practiceMenu() {
+      overlay(function (box, close) {
+        box.appendChild(el('h2', { text: piece.title || 'Ohne Titel' }));
+        function item(ic, label, sub, fn) { return el('button', { class: 'menu-item', onclick: function () { close(); fn(); } }, [icon(ic), el('div', {}, [el('b', { text: label }), el('span', { text: sub })])]); }
+        box.appendChild(item('restart', 'Von vorn beginnen', 'Zurück zum Anfang (oder zum Anfang der Schleife)', restart));
+        if (st.loop) box.appendChild(item('loop', 'Schleife aufheben', 'Wieder das ganze Stück üben', function () { setLoop(null); }));
+        box.appendChild(item('edit', 'Noten bearbeiten', 'Scan, Notentext, Erkennung', function () { persist(); showEditor(piece); }));
+        box.appendChild(item('gear', 'Einstellungen', 'Klang, Klaviatur, Mikrofon', function () { openSettings(relayout); }));
+        var stc = el('input', { type: 'checkbox', id: 'pm-status' }); stc.checked = S.showStatus !== false;
+        stc.addEventListener('change', function () { S.showStatus = stc.checked; saveSettings(); renderFocus(); });
+        box.appendChild(el('label', { class: 'toggle', for: 'pm-status' }, [stc, 'Anzeige der nächsten Töne']));
+        box.appendChild(el('p', { class: 'hint', text: 'Tipp: Tippe in den Noten auf einen Takt und dann auf einen zweiten, um diese Stelle in Schleife zu üben.' }));
+      });
+    }
     view.appendChild(panel);
 
     /* --- Klaviatur --- */
-    var range = score ? PC.keyboardRange(score.minMidi, score.maxMidi) : { lo: 48, hi: 83 };
+    function fitRange() {
+      if (!score) return { lo: 48, hi: 83 };
+      if (S.kbSize !== 'fit') return PC.keyboardRange(score.minMidi, score.maxMidi);
+      var lo = score.minMidi - 1, hi = score.maxMidi + 1;
+      while (PC.isBlack(lo)) lo--; while (PC.isBlack(hi)) hi++;
+      while (PC.whiteIndex(hi) - PC.whiteIndex(lo) + 1 < 15) { if ((PC.whiteIndex(hi) - PC.whiteIndex(lo)) % 2) { hi++; while (PC.isBlack(hi)) hi++; } else { lo--; while (PC.isBlack(lo)) lo--; } }
+      return { lo: Math.max(21, lo), hi: Math.min(108, hi) };
+    }
+    var range = fitRange();
     kb = new Keyboard(view, onKeyDown, onKeyUp);
     root.appendChild(view);
     kb.setRange(range.lo, range.hi);
@@ -2536,7 +2597,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       smoothTick += (target - smoothTick) * (1 - Math.exp(-dt * 9));
       return smoothTick;
     }
-    function relayout() { kb.setRange(range.lo, range.hi); if (score) showStep(st.i, true); }
+    function relayout() { range = fitRange(); kb.setRange(range.lo, range.hi); if (score) showStep(st.i, true); }
+    window.addEventListener('resize', onResize);
+    var rzT = null; function onResize() { clearTimeout(rzT); rzT = setTimeout(function () { if (root.contains(kb.wrap)) relayout(); }, 150); }
     function accompany(t0, t1, delay) {
       if (!S.accomp || st.hands === 'RL' || st.input === 'mic' || !score) return;
       var c = Snd.resume(); if (!c) return;
@@ -2581,7 +2644,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (st.mode !== 'demo') parts.push('✓ ' + st.stats.hit + '  ✗ ' + (st.mode === 'play' ? st.stats.miss + st.stats.wrong : st.stats.wrong));
       sub.textContent = parts.join(' · ');
     }
-    function renderTempo() { tempoOut.textContent = st.pct + ' %'; }
+    function renderTempo() { tempoOut.textContent = st.pct + ' %'; if (optBtn) renderFocusBadge(); }
+    function renderFocusBadge() { var changed = st.hands !== 'RL' || st.pct !== 100 || st.input !== 'tap' || st.metro; optBtn.querySelector('.badge').hidden = !changed; }
     function renderLoop() {
       var l = st.loop;
       loopChip.hidden = !l; clear(loopChip);
@@ -2591,14 +2655,16 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       clear(goBtn);
       var running = !!(st.play || st.demo);
       goBtn.hidden = st.mode === 'wait';
-      if (st.mode === 'play') { goBtn.appendChild(icon(running ? 'stop' : 'play', true)); goBtn.appendChild(document.createTextNode(running ? ' Stopp' : ' Start')); }
-      else if (st.mode === 'demo') { goBtn.appendChild(icon(running ? 'stop' : 'play', true)); goBtn.appendChild(document.createTextNode(running ? ' Stopp' : ' Abspielen')); }
+      goBtn.classList.toggle('stop', running);
+      goBtn.setAttribute('aria-label', running ? 'Stopp' : st.mode === 'demo' ? 'Abspielen' : 'Start');
+      goBtn.appendChild(icon(running ? 'stop' : 'play', true));
+      goBtn.appendChild(el('span', { text: running ? 'Stopp' : st.mode === 'demo' ? 'Abspielen' : 'Start' }));
     }
     function setPct(v) {
       st.pct = clamp(Math.round(v / 5) * 5, 30, 150); renderTempo(); persist();
       if (st.demo) { var d = st.demo; stopAll(); startDemo(d.restartFrom); }
     }
-    function setHands(h) { stopAll(); st.hands = h; persist(); rebuild(); if (notation) notation.setSteps(st.steps); st.stats = { hit: 0, miss: 0, wrong: 0, loops: 0 }; if (notation) notation.clearMarks(); showStep(st.i); }
+    function setHands(h) { stopAll(); st.hands = h; persist(); renderFocusBadge(); rebuild(); if (notation) notation.setSteps(st.steps); st.stats = { hit: 0, miss: 0, wrong: 0, loops: 0 }; if (notation) notation.clearMarks(); showStep(st.i); }
     function setLoop(l) { st.loop = l; if (notation) notation.setLoop(l); renderLoop(); persist(); if (!st.play && !st.demo && score) { rebuild(); showStep(st.i); } }
     function onMeasureTap(n) {
       var l = st.loop;
@@ -2611,7 +2677,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       renderGo(); modeSeg.sync(); restart();
     }
     function setInput(v) {
-      stopInput(); st.input = v;
+      stopInput(); st.input = v; renderFocusBadge();
       Object.keys(inBtns).forEach(function (k) { inBtns[k].setAttribute('aria-pressed', k === v ? 'true' : 'false'); });
       if (v === 'mic') startMic();
       else if (v === 'midi') startMidi();
@@ -2630,7 +2696,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           });
         });
     }
-    function setInputQuiet(v) { st.input = v; Object.keys(inBtns).forEach(function (k) { inBtns[k].setAttribute('aria-pressed', k === v ? 'true' : 'false'); }); }
+    function setInputQuiet(v) { st.input = v; renderFocusBadge(); Object.keys(inBtns).forEach(function (k) { inBtns[k].setAttribute('aria-pressed', k === v ? 'true' : 'false'); }); }
     function startMidi() {
       connectMidi(function (m) { handleNote(m, perf()); kb.setDown(m, true); }, function (m) { kb.setDown(m, false); })
         .then(function (n) { toast(n + (n === 1 ? ' MIDI-Gerät verbunden' : ' MIDI-Geräte verbunden')); })
@@ -2849,7 +2915,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (!score) return;
       rebuild(); showStep(loopRange()[0]);
     }
-    cleanup = function () { stopAll(); stopInput(); if (scanView) scanView.destroy(); if (falls) falls.stop(); clearInterval(practiceTimer); Wake.off(); persist(); saveDays(); };
+    cleanup = function () { window.removeEventListener('resize', onResize); stopAll(); stopInput(); if (scanView) scanView.destroy(); if (falls) falls.stop(); clearInterval(practiceTimer); Wake.off(); persist(); saveDays(); };
   }
 
   /* ================= Einstellungen ================= */
@@ -2883,7 +2949,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         check('Tempo-Trainer: in der Schleife automatisch schneller', 'trainer')
       ]));
       box.appendChild(group('Ansicht', [
-        select('Tastengröße', 'kbSize', [['s', 'klein (mehr Oktaven)'], ['m', 'mittel'], ['l', 'groß']], re),
+        select('Klaviatur', 'kbSize', [['fit', 'ganz sichtbar (passt sich an)'], ['m', 'mittel, zum Wischen'], ['l', 'groß, zum Wischen']], re),
         select('Tastenbeschriftung', 'labels', [['c', 'nur C'], ['all', 'alle Töne'], ['off', 'aus']], re),
         slider('Wasserfall-Tempo', 'pps', 80, 320, 10, function (v) { return v < 130 ? 'ruhig' : v < 220 ? 'mittel' : 'schnell'; })
       ]));
