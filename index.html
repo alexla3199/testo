@@ -282,6 +282,7 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 @media (prefers-reduced-motion: reduce) { .cursor, .st-drawer, .sheetbox, .st-pill, .st-big { animation: none !important; transition: none !important; } }
 
 .version { margin: 0; padding: 4px 0 20px; text-align: center; font-size: 12px; color: var(--muted); }
+.helplist { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; }
 
 </style>
 <div id="app"></div>
@@ -2268,7 +2269,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '4.3', VERSION_DATE = '31.10.2026';
+  var VERSION = '4.4', VERSION_DATE = '31.10.2026';
   /* ================= Umgebung ================= */
   var ENV = {
     artifact: !!(window.claude && window.claude.use),
@@ -2419,12 +2420,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   function Mic() { this.timer = null; this.stream = null; this.nodes = null; }
   Mic.prototype.open = function () {
     var self = this;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('unsupported'));
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { var ue = new Error('unsupported'); ue.name = 'NoMediaDevices'; return Promise.reject(ue); }
     // iPhone: im Modus „nur Wiedergabe“ liefert das Mikrofon Stille – vor der Aufnahme umstellen
     micOn = true; audioSession('auto');
-    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } }).then(function (stream) {
+    var gum = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+      .catch(function (e) { if (e && (e.name === 'OverconstrainedError' || e.name === 'TypeError' || e.name === 'NotReadableError')) return navigator.mediaDevices.getUserMedia({ audio: true }); throw e; });
+    return gum.then(function (stream) {
       var ctx = Snd.resume();
       self.stream = stream;
+      try { if (ctx.state !== 'running') ctx.resume(); } catch (e) { /* ignorieren */ }
       var src = ctx.createMediaStreamSource(stream);
       function an(n) { var a = ctx.createAnalyser(); a.fftSize = n; a.smoothingTimeConstant = 0; a.minDecibels = -140; a.maxDecibels = 0; src.connect(a); return a; }
       var aT = an(2048), aS = an(4096), aL = an(16384);
@@ -3482,11 +3486,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         .then(function () { micDot.hidden = false; toast('Mikrofon an: spiel auf deinem Klavier', 2600); })
         .catch(function (e) {
           st.input = 'tap'; renderAll(); diagBtn.hidden = true;
-          overlay(function (box, close) {
-            box.appendChild(el('h2', { text: 'Mikrofon nicht verfügbar' }));
-            box.appendChild(el('p', { class: 'hint', text: ENV.artifact ? 'Innerhalb von Claude ist das Mikrofon gesperrt. In der Tasto-App auf deinem iPhone funktioniert es.' : 'Erlaube Tasto das Mikrofon. Wurde es abgelehnt: iPhone-Einstellungen → Safari (bzw. Chrome) → Mikrofon, oder in Safari auf „aA“ → Website-Einstellungen.' }));
-            box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn primary', text: 'Verstanden', onclick: close })]));
-          });
+          micHelp(e, function () { setInput('mic'); });
         });
     }
     function startMidi() {
@@ -3717,6 +3717,31 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn primary', text: 'Schließen', onclick: close })]));
       box._sv = sv;
     }, function () { /* URLs werden beim nächsten Öffnen neu erstellt */ });
+  }
+
+  /* ================= Mikrofon-Hilfe ================= */
+  function inAppBrowser() {
+    var ua = navigator.userAgent || '';
+    return /FBAN|FBAV|Instagram|Line\/|GSA\/|Claude|WhatsApp|Telegram|wv\)/i.test(ua) || (ENV.ios && !/Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua) && !ENV.standalone);
+  }
+  function micHelp(e, retry) {
+    var name = (e && e.name) || 'Fehler';
+    var steps = [];
+    if (ENV.artifact) steps = ['Innerhalb von Claude ist das Mikrofon immer gesperrt.', 'Öffne Tasto über den Link alexla3199.github.io/testo in Safari.'];
+    else if (name === 'NoMediaDevices' || inAppBrowser()) steps = ['Du bist vermutlich in einem eingebauten Browser einer App (z. B. wenn du den Link in Claude oder WhatsApp angetippt hast). Dort gibt es kein Mikrofon.', 'Tippe unten auf das Kompass-Symbol bzw. „In Safari öffnen“, oder kopiere den Link und füge ihn direkt in Safari ein.'];
+    else if (name === 'NotAllowedError' || name === 'SecurityError') steps = ['Das Mikrofon wurde für diese Seite abgelehnt.', 'Safari: links in der Adressleiste auf „aA“ tippen → Website-Einstellungen → Mikrofon → „Erlauben“.', 'Oder: iPhone-Einstellungen → Apps → Safari → Mikrofon → „Fragen“ oder „Erlauben“.', 'Chrome: iPhone-Einstellungen → Apps → Chrome → Mikrofon einschalten.', 'Hast du Tasto auf dem Home-Bildschirm: App schließen, neu öffnen und bei der Frage „Erlauben“ tippen.'];
+    else if (name === 'NotFoundError') steps = ['Es wurde kein Mikrofon gefunden. Ist ein Gerät angeschlossen, das kein Mikrofon hat?'];
+    else if (name === 'NotReadableError' || name === 'AbortError') steps = ['Eine andere App benutzt gerade das Mikrofon (z. B. ein Telefonat oder eine Sprachaufnahme). Beende sie und versuche es nochmal.'];
+    else steps = ['Das Mikrofon ließ sich nicht starten. Schließe Tasto komplett, öffne es neu und versuche es nochmal.'];
+    overlay(function (box, close) {
+      box.appendChild(el('h2', { text: 'Mikrofon nicht verfügbar' }));
+      box.appendChild(el('ol', { class: 'helplist' }, steps.map(function (t) { return el('li', { text: t }); })));
+      box.appendChild(el('p', { class: 'hint', text: 'Technischer Hinweis: ' + name + (e && e.message ? ' – ' + e.message : '') }));
+      box.appendChild(el('div', { class: 'acts' }, [
+        el('button', { class: 'btn', text: 'Schließen', onclick: close }),
+        retry && !ENV.artifact ? el('button', { class: 'btn primary', text: 'Nochmal versuchen', onclick: function () { close(); retry(); } }) : null
+      ]));
+    });
   }
 
   /* ================= Einstellungen ================= */
