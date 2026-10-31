@@ -2268,7 +2268,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '4.2', VERSION_DATE = '31.10.2026';
+  var VERSION = '4.3', VERSION_DATE = '31.10.2026';
   /* ================= Umgebung ================= */
   var ENV = {
     artifact: !!(window.claude && window.claude.use),
@@ -2420,7 +2420,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.open = function () {
     var self = this;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('unsupported'));
-    micOn = true;
+    // iPhone: im Modus „nur Wiedergabe“ liefert das Mikrofon Stille – vor der Aufnahme umstellen
+    micOn = true; audioSession('auto');
     return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } }).then(function (stream) {
       var ctx = Snd.resume();
       self.stream = stream;
@@ -3472,7 +3473,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function stopInput() { mic.stop(); micDot.hidden = true; }
     function startMic() {
       Snd.resume();
-      mic.start(function (midi, t, kind) { handleNote(midi, t, kind); }, targetsNow, function (lv) { micDot.lastChild.style.transform = 'scaleY(' + (0.15 + lv * 0.85).toFixed(2) + ')'; })
+      var heardAt = perf(), warned = false;
+      mic.start(function (midi, t, kind) { handleNote(midi, t, kind); }, targetsNow, function (lv, db) {
+        micDot.lastChild.style.transform = 'scaleY(' + (0.15 + lv * 0.85).toFixed(2) + ')';
+        if (db > -72) heardAt = perf();
+        else if (!warned && perf() - heardAt > 8) { warned = true; toast('Das Mikrofon liefert kaum Ton. Prüfe die Mikrofon-Freigabe für Safari bzw. Chrome und ob ein Kopfhörer verbunden ist.', 6000); }
+      })
         .then(function () { micDot.hidden = false; toast('Mikrofon an: spiel auf deinem Klavier', 2600); })
         .catch(function (e) {
           st.input = 'tap'; renderAll(); diagBtn.hidden = true;
