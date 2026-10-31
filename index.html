@@ -2,8 +2,8 @@
 <html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#eceff3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d1319" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#070b14" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tasto">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,34 +14,21 @@
 <style>body{padding-top:env(safe-area-inset-top,0px);margin:0}html body #app{height:calc(100dvh - env(safe-area-inset-top,0px));min-height:0}</style></head><body>
 <style>
 /* Tasto – Gestaltung: Mitternachtsblau, Bernstein, Elfenbein */
+/* Tasto – Gestaltung „Nachtkonzert“: tiefes Blau, Bernstein, Glas; überall gleich (die Übungsbühne war schon dunkel) */
 :root {
-  --bg: #f4f2ee; --surface: #ffffff; --surface2: #eeebe5; --ink: #131824; --muted: #697182; --line: #e2ddd3;
-  --accent: #1c3d70; --accent-ink: #ffffff; --brand: #f0a030; --brand-ink: #1b1206;
-  --hand-r: #2f86e8; --hand-l: #ec6f3f; --ok: #1fae74; --bad: #e0455a;
-  --key-w: #fcfcfa; --key-w2: #e2dfd8; --key-b: #15181f; --cursor: rgba(47, 134, 232, .14);
-  --shadow: 0 1px 2px rgba(20, 24, 36, .06), 0 8px 24px rgba(20, 24, 36, .07);
-  --f-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --f-title: "Fraunces", Georgia, "Times New Roman", serif;
-  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0a0f1a; --surface: #121a29; --surface2: #1a2437; --ink: #edf1f7; --muted: #8f9bb1; --line: #243049;
-    --accent: #ffb547; --accent-ink: #1b1206; --brand: #ffb547; --brand-ink: #1b1206;
-    --hand-r: #5aaaff; --hand-l: #ff8a5c; --ok: #3ddc97; --bad: #ff5d6c;
-    --key-w: #eef0f3; --key-w2: #c3c9d2; --key-b: #0a0d12; --cursor: rgba(90, 170, 255, .18);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0a0f1a; --surface: #121a29; --surface2: #1a2437; --ink: #edf1f7; --muted: #8f9bb1; --line: #243049;
-  --accent: #ffb547; --accent-ink: #1b1206; --brand: #ffb547; --brand-ink: #1b1206;
+  --bg: #070b14; --surface: rgba(255, 255, 255, .045); --surface-solid: #111a2b; --surface2: rgba(255, 255, 255, .075); --ink: #eef2f8; --muted: #8e9ab0; --line: rgba(255, 255, 255, .09);
+  --accent: #ffb547; --accent2: #ff8a3d; --accent-ink: #1a1105; --brand: #ffb547; --brand-ink: #1a1105;
   --hand-r: #5aaaff; --hand-l: #ff8a5c; --ok: #3ddc97; --bad: #ff5d6c;
   --key-w: #eef0f3; --key-w2: #c3c9d2; --key-b: #0a0d12; --cursor: rgba(90, 170, 255, .18);
-  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 12px 32px rgba(0, 0, 0, .35);
+  --glow: radial-gradient(90% 60% at 100% -10%, rgba(255, 160, 60, .16), transparent 60%), radial-gradient(80% 50% at -10% 0%, rgba(70, 130, 255, .16), transparent 60%);
+  --f-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-title: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: dark;
 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 html { overscroll-behavior: none; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-ui); -webkit-text-size-adjust: 100%; }
@@ -379,6 +366,70 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .key .kfg { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #0b1220; font: 800 13px/20px var(--f-ui); text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); pointer-events: none; }
 .key.b .kfg { bottom: 10px; width: 17px; height: 17px; font-size: 11px; line-height: 17px; }
 .st-pill .fg { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; border-radius: 50%; background: #fff; color: #0b1220; font-size: 13px; vertical-align: 2px; }
+/* Nachfrage zum Selbstlernen: Box über den Balken (das Spiel läuft weiter) */
+.st-ask { position: absolute; z-index: 3; top: 62px; left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 24px)); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px; border-radius: 16px; background: rgba(16, 24, 42, .97); border: 1px solid rgba(255, 255, 255, .2); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); color: #e9eef6; font: 500 13px/1.35 var(--f-ui); }
+.st-ask b { grid-column: 1 / -1; font-size: 17px; }
+.st-ask span { grid-column: 1 / -1; color: #b9c4d6; }
+.st-ask button { border: 0; border-radius: 12px; padding: 11px 10px; font: 700 15px/1 var(--f-ui); background: rgba(255, 255, 255, .14); color: #fff; }
+.st-ask button.yes { background: var(--ok); }
+@media (max-height: 500px) { .st-ask { top: 44px; padding: 10px; } .st-ask span { display: none; } }
+
+/* ================= Gestaltung „Nachtkonzert“: Feinschliff aller Ansichten ================= */
+body { background: var(--bg) var(--glow) no-repeat fixed; }
+body.stage-on { background: #070b14; }
+h1, h2, h3, .brand, .bar h1, .card h2, .sheetbox h2, .lib-head h2 { font-family: var(--f-title); font-weight: 700; letter-spacing: -.02em; }
+.brand { font-size: 27px; }
+.brand span { background: linear-gradient(90deg, #fff, #ffd59a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Knöpfe */
+.btn { background: var(--surface2); border-color: var(--line); color: var(--ink); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.btn.primary { background: linear-gradient(135deg, #ffc56b, #ff8f3d); border: 0; color: var(--accent-ink); box-shadow: 0 6px 20px rgba(255, 150, 60, .28), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.btn.primary svg { color: var(--accent-ink); }
+.ibtn { color: var(--ink); }
+.ibtn:active, .btn:active { filter: brightness(1.15); }
+/* Karten aus Glas */
+.card, .piece, .stat, .menu-item, .setup-card, .setup-ok, .toggle, .flow, .issue, .cal-row, .path-lv, .rv-row { background: var(--surface); border-color: var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.card, .piece { box-shadow: var(--shadow); border-radius: 20px; }
+.card.ai { background: linear-gradient(#0f1727, #0f1727) padding-box, linear-gradient(135deg, #ffb547, #5aaaff) border-box; }
+.stat { border-radius: 18px; padding: 14px; }
+.stat b { font-size: 22px; }
+.stat svg { color: var(--accent); }
+/* Bibliothek: Stücke mit farbigem Cover und Lernweg-Fortschritt */
+.piece { padding: 12px; gap: 14px; transition: transform .12s, border-color .2s; }
+.piece:active { transform: scale(.985); }
+.piece .t { font: 700 17px/1.2 var(--f-title); letter-spacing: -.01em; }
+.thumb { width: 64px; height: 80px; border-radius: 14px; color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 6px 16px rgba(0, 0, 0, .35); }
+.thumb svg { width: 28px; height: 28px; opacity: .95; }
+.pbar-lw { margin-top: 9px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.pbar-lw i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffc56b, #ff8f3d); }
+.chip { background: rgba(255, 255, 255, .07); color: #b8c3d6; }
+.resume { border-radius: 24px; background: radial-gradient(120% 140% at 100% 0%, rgba(255, 150, 60, .35) 0%, rgba(255, 150, 60, 0) 55%), linear-gradient(135deg, #1a3768, #0b1426 70%); border: 1px solid rgba(255, 255, 255, .1); }
+.resume svg { background: linear-gradient(135deg, #ffc56b, #ff8f3d); }
+/* Fenster */
+.overlay { background: rgba(3, 6, 12, .62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.sheetbox { background: linear-gradient(180deg, rgba(24, 34, 54, .97), rgba(13, 20, 34, .98)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 30px 80px rgba(0, 0, 0, .55); }
+.result-n div { background: rgba(255, 255, 255, .06); }
+.result-n b { color: #fff; }
+.toast { background: rgba(18, 28, 46, .96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, .12); }
+/* Eingaben */
+input[type="text"], input[type="password"], textarea, select { background: rgba(0, 0, 0, .25); border-color: var(--line); color: var(--ink); }
+input[type="range"] { accent-color: var(--accent); }
+input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; }
+.seg { background: rgba(255, 255, 255, .06); }
+.seg button[aria-pressed="true"] { background: rgba(255, 255, 255, .14); color: #fff; }
+.step { background: rgba(255, 255, 255, .06); }
+.meter { background: rgba(255, 255, 255, .08); }
+.meter i { background: linear-gradient(90deg, #3ddc97, #5aaaff); }
+.pbar { background: rgba(255, 255, 255, .08); }
+/* Noten-Vorschau bleibt Papier */
+.preview { background: #fbf9f4; color: #141821; }
+/* Einstellen */
+.cal-big { font: 800 50px/1.1 var(--f-title); background: linear-gradient(90deg, #ffd59a, #ff8f3d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.path-lv.cur { background: rgba(255, 140, 60, .1); }
+.version { color: #5f6b82; }
+.menu-item svg, .intro-item svg { color: var(--accent); }
+.empty b { font-family: var(--f-title); }
+/* Übungsbühne: Kopfzeile wie die Karten */
+.st-hud { background: rgba(7, 11, 20, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
 </style>
 <div id="app"></div>
@@ -1546,7 +1597,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     var specRing = [], prevS = null, fluxHist = [], lastOnset = -9, onsetT = -9, pre = null;
     var hist = {}; // midi -> [{t,e}]
     var lastHitT = -9, lastHitE = -200, freshUntil = {}, lastEmit = {}, cnt = {}, wrongDone = {}, ringSeen = {}, ringSet = {}, since = {}, peakAfter = {}, armed = {}, onsetTargets = [];
-    var lastLarge = -9, resL = null, level = -100, dbg = opt.debug || null, lastSal = {};
+    var lastLarge = -9, resL = null, level = -100, dbg = opt.debug || null, lastSal = {}, salStep = {};
     // Lernen: pro Ton typische Stärke beim Anschlag (aus Einmessen, Anlernen und Spielen)
     var waitMode = true, kiF = [], kiLast = -99, kiEnd = -99, pend = {}, rejUntil = {}, kiOnT = {}, kiStat = { acc: 0, rej: 0, ki: 0 };
     // Hör-KI (Basic Pitch): Frames {t, on[88], nt[88]}; aktiv, solange regelmäßig Ergebnisse kommen
@@ -1577,11 +1628,19 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     var chL = {}, curMulti = false;
     if (opt.chordLearned) Object.keys(opt.chordLearned).forEach(function (m) { var x = opt.chordLearned[m]; if (x && x.n) chL[m] = { sal: +x.sal || 0, nt: +x.nt || 0, on: +x.on || 0, n: +x.n || 0 }; });
     function clampV(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function teachCh(m, sal, nt, on, confirmed) {
+      var c = chL[m] || { sal: sal, nt: nt, on: on, n: 0, conf: 0 }, a = 1 / (Math.min(c.n, 8) + 1);
+      c.sal += (sal - c.sal) * a; c.nt += (nt - c.nt) * a; c.on += (on - c.on) * a; c.n = Math.min(20, c.n + 1);
+      if (confirmed) c.conf = Math.min(20, (c.conf || 0) + 1);
+      chL[m] = c;
+    }
     // Schwellen für Ton m im Akkord: aus den eingespielten Zusammenklängen (nie lockerer als die Untergrenzen)
     function chThr(m) {
       var c = curMulti && !P.noChordLearn ? chL[m] : null;
       if (!c || c.n < 1 || !(c.nt > 0)) return null;
-      return { nt: clampV(c.nt * 0.7, 0.18, P.kiNote || 0.3), on: clampV(c.on * 0.7, 0.25, P.kiOn2 || 0.4), fNt: clampV(c.nt * 0.7, 0.22, P.kiFundNt || 0.45), fOn: clampV(c.on * 0.7, 0.3, P.kiFundOn || 0.5) };
+      // von dir bestätigt („Ja, gespielt“): etwas tiefere Untergrenzen – aber nie ganz offen, damit ein weggelassener Ton auffällt
+      var cf = (c.conf || 0) >= 1;
+      return { nt: clampV(c.nt * 0.7, cf ? 0.12 : 0.18, P.kiNote || 0.3), on: clampV(c.on * 0.7, cf ? 0.18 : 0.25, P.kiOn2 || 0.4), fNt: clampV(c.nt * 0.7, cf ? 0.15 : 0.22, P.kiFundNt || 0.45), fOn: clampV(c.on * 0.7, cf ? 0.22 : 0.3, P.kiFundOn || 0.5), conf: cf };
     }
     if (opt.learned) Object.keys(opt.learned).forEach(function (m) { var x = opt.learned[m]; if (x && x.n) learned[m] = { sal: +x.sal || 0, rise: +x.rise || 0, n: +x.n || 0 }; });
     function learn(m, sal, rise, w) {
@@ -1755,6 +1814,8 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         }
         if (opt.dbgKI && p.rc) console.log('KIRC', t, 'ok', okk, 'at', p.at.toFixed(2), 't0', p.t0.toFixed(2), 'stepT', stepT.toFixed(2), 'onT', (kiOnT[t] || 0).toFixed(2), kiF.filter(function (f) { return f.t > p.t0 - 0.5 && f.t < p.at + 0.1; }).map(function (f) { return f.t.toFixed(2) + ':' + f.on[t - 21].toFixed(2); }).join(' '));
         if (opt.dbgKI && !p.rc) console.log('KIJ', t, okk ? 'ok' : 'REJ', 'nt', j ? j.nt.toFixed(2) : '-', 'on', j ? j.on.toFixed(2) : '-', 'oc', j ? j.oc.toFixed(2) : '-', 'sal', p.sal.toFixed(2));
+        // still mitlernen: sauber erkannter Ton im Akkord → so klingt er bei dir im Zusammenklang
+        if (okk && j && curMulti && !P.noChordLearn && opt.passiveLearn !== false) teachCh(t, p.sal, j.nt, j.on, false);
         if (okk) { kiStat.acc++; if (j && j.onT != null) kiOnT[t] = j.onT; out.push({ midi: t, t: j && j.onT != null ? j.onT : p.at - 0.1, kind: 'hit', learned: p.learned, why: 'ki-ok sal' + p.sal.toFixed(2) + (j ? ' on' + j.on.toFixed(2) + ' nt' + j.nt.toFixed(2) + ' oc' + j.oc.toFixed(2) : ' (ohne KI)') + (p.rc ? ' rc' : '') }); }
         else { kiStat.rej++; lastEmit[t] = p.prevLE; armed[t] = p.prevArmed; rejUntil[t] = now + 0.3; if (opt.onReject) opt.onReject(t, j, p); }
       });
@@ -1764,8 +1825,8 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         if (t1 <= t0) return;
         var j = kiJudge(t, t0, t1, targets), ed = kiEdge(t, t0 - 0.03, t1); j.on = ed.v; j.onT = ed.t;
         var rcK = (lastEmit[t] != null && lastEmit[t] >= prevStepT - 0.05 && lastEmit[t] < stepT + 0.02) || prevTg[t];
-        var wk = isWeak(t);
-        if (j.on >= (rcK ? 0.75 : wk ? 0.45 : (P.kiOnly || 0.6)) && j.nt >= (wk ? 0.25 : (P.kiOnlyNt || 0.4)) && !(j.oc >= 0.45 && j.nt < j.oc * 0.7)) {
+        var wk = isWeak(t), ctK = chThr(t), cfK = ctK && ctK.conf;
+        if (j.on >= (rcK ? 0.75 : cfK ? Math.max(0.35, ctK.on + 0.12) : wk ? 0.45 : (P.kiOnly || 0.6)) && j.nt >= (cfK ? ctK.nt : wk ? 0.25 : (P.kiOnlyNt || 0.4)) && !(j.oc >= 0.45 && j.nt < j.oc * 0.7)) {
           kiStat.ki++; kiOnT[t] = j.onT; lastEmit[t] = now; armed[t] = false; cnt[t] = 0; freshUntil[t] = 0; peakAfter[t] = energy(S, t);
           out.push({ midi: t, t: j.onT, kind: 'hit', why: 'ki on' + j.on.toFixed(2) + ' nt' + j.nt.toFixed(2) });
         }
@@ -1781,7 +1842,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         }
         var ready = lastEmit[t] == null || armed[t];
         var rise = riseOf(t, now), sal = Math.max(salOf(t), tsOf(t));
-        lastSal[t] = { v: sal, t: now };
+        lastSal[t] = { v: sal, t: now }; if (!(salStep[t] >= sal)) salStep[t] = sal;
         // Unterton eines gerade gespielten höheren Tons? Dann müssen eigene, nicht geteilte Teiltöne klar da sein
         var rel = recent.filter(function (r) { var d = r - t; return targets.indexOf(r) < 0 && (d === 12 || d === 19 || d === 24 || d === 28 || d === 31); });
         if (rel.length && sal >= P.accept) {
@@ -1947,15 +2008,14 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       setWait: function (on) { waitMode = !!on; },
       kiActive: function (now) { return kiOn(now); },
       kiHeard: function (th) { var f = kiF[kiF.length - 1], o = []; if (!f) return o; for (var i = 0; i < 88; i++) if (f.nt[i] >= (th || 0.5)) o.push(i + 21); return o; },
-      step: function (now) { prevStepT = stepT; stepT = now; prevTg = stepTg; stepTg = {}; freshUntil = {}; cnt = {}; nmTrack = {}; nmList = {}; },
+      step: function (now) { salStep = {}; prevStepT = stepT; stepT = now; prevTg = stepTg; stepTg = {}; freshUntil = {}; cnt = {}; nmTrack = {}; nmList = {}; },
       learnState: function () { var o = {}; Object.keys(learned).forEach(function (m) { var x = learned[m]; o[m] = { sal: +x.sal.toFixed(3), rise: +x.rise.toFixed(2), n: x.n }; }); return o; },
       teach: function (m, sal, rise, w) { learn(m, sal, rise, w || 3); },
       // Zusammenklang einspielen: Werte eines Tons im Akkord merken (Mittel über mehrere Akkorde)
-      teachChord: function (m, sal, nt, on) {
-        var c = chL[m] || { sal: sal, nt: nt, on: on, n: 0 }, a = 1 / (c.n + 1);
-        c.sal += (sal - c.sal) * a; c.nt += (nt - c.nt) * a; c.on += (on - c.on) * a; c.n = Math.min(20, c.n + 1); chL[m] = c;
-      },
-      chordState: function () { var o = {}; Object.keys(chL).forEach(function (m) { var x = chL[m]; o[m] = { sal: +x.sal.toFixed(3), nt: +x.nt.toFixed(3), on: +x.on.toFixed(3), n: x.n }; }); return o; },
+      teachChord: function (m, sal, nt, on, confirmed) { teachCh(m, sal, nt, on, confirmed); },
+      chordState: function () { var o = {}; Object.keys(chL).forEach(function (m) { var x = chL[m]; o[m] = { sal: +x.sal.toFixed(3), nt: +x.nt.toFixed(3), on: +x.on.toFixed(3), n: x.n, conf: x.conf || 0 }; }); return o; },
+      // Beweislage für Ton m seit Schrittbeginn (für die Nachfrage „Hast du … gespielt?“)
+      evidence: function (m, now, tg) { var t0 = stepT - 0.1, j = kiJudge(m, t0, now, tg || [m]), ed = kiEdge(m, t0 - 0.03, now); return { nt: j.nt, on: Math.max(j.on, ed.v), oc: j.oc, sal: salStep[m] || 0, ki: kiOn(now) }; },
       // Hör-KI-Einschätzung für Ton m im Zeitfenster (Einstellen): Anschlag, Klingen, Oktav-Verdacht
       kiProbe: function (m, t0, t1, tg) { var j = kiJudge(m, t0, t1, tg || [m]), ed = kiEdge(m, t0 - 0.03, t1); j.on = Math.max(j.on, ed.v); return j; },
       kiCovered: function (t) { return kiEnd >= t; },
@@ -4172,7 +4232,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.6', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.7', VERSION_DATE = '31.10.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -4182,6 +4242,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   var LearnCh = {};
   try { LearnCh = JSON.parse(localStorage.getItem('ks-learn-ch') || '{}') || {}; } catch (e) { LearnCh = {}; }
   function saveLearnCh() { try { localStorage.setItem('ks-learn-ch', JSON.stringify(LearnCh)); } catch (e) { /* ignorieren */ } }
+  function mergeLearnCh(det) { if (!det || !det.chordState) return; var cs = det.chordState(); Object.keys(cs).forEach(function (m) { LearnCh[m] = cs[m]; }); saveLearnCh(); }
   function chordCount() { return Object.keys(LearnCh).filter(function (m) { return LearnCh[m] && LearnCh[m].n >= 1; }).length; }
   function learnedCount() { return Object.keys(Learn).filter(function (m) { return Learn[m] && Learn[m].n >= 2; }).length; }
   /* ================= Umgebung ================= */
@@ -4416,7 +4477,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     return this.open().then(function (io) {
       var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, trace: window.__tastoTrace || null, P: calP(), learned: Learn, chordLearned: LearnCh });
       self.det = det;
-      clearInterval(self.saveT); self.saveT = setInterval(function () { if (det.learnState) mergeLearn(det.learnState()); }, 8000);
+      clearInterval(self.saveT); self.saveT = setInterval(function () { if (det.learnState) mergeLearn(det.learnState()); mergeLearnCh(det); }, 8000);
       if (kiPossible() && S.ki !== false) self.startKI(det);
       self.timer = setInterval(function () {
         io.fresh();
@@ -4489,7 +4550,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     if (this.rec) { try { this.rec.mr.stop(); } catch (e) { /* ignorieren */ } this.rec = null; }
     micOn = false; audioSession('playback');
     clearInterval(this.timer); this.timer = null; clearInterval(this.saveT); this.saveT = null;
-    if (this.det && this.det.learnState) { try { mergeLearn(this.det.learnState()); } catch (e) { /* ignorieren */ } }
+    if (this.det && this.det.learnState) { try { mergeLearn(this.det.learnState()); mergeLearnCh(this.det); } catch (e) { /* ignorieren */ } }
     this.det = null;
     clearInterval(this.kiTimer); this.kiTimer = null; this.kiState = null;
     if (this.kiNodes) { this.kiNodes.forEach(function (n) { try { n.disconnect(); } catch (e) { /* ignorieren */ } }); try { this.kiNodes[0].onaudioprocess = null; } catch (e) { /* ignorieren */ } this.kiNodes = null; }
@@ -4998,18 +5059,22 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         if (!all.length) list.appendChild(el('div', { class: 'empty' }, [el('b', { text: 'Noch keine Stücke' }), el('span', { text: 'Tippe auf „Neues Stück“ und fotografiere deine Noten.' })]));
         all.forEach(function (p) {
           var parsed = p.abc ? PC.parseABC(p.abc) : null, hasNotes = parsed && parsed.ok;
-          var th = el('div', { class: 'thumb' });
+          // Cover: eigener Farbverlauf je Stück (aus dem Titel), damit die Bibliothek lebendig aussieht
+          var hh = 0, tt = p.title || 'x'; for (var ci = 0; ci < tt.length; ci++) hh = (hh * 31 + tt.charCodeAt(ci)) >>> 0;
+          var COV = [['#ff9a3d', '#b4235a'], ['#5aaaff', '#3b2fb5'], ['#3ddc97', '#0e6f8f'], ['#ffc56b', '#e0455a'], ['#b38bff', '#3a2a9b'], ['#ff7eb3', '#7b2ff7'], ['#4fd1c5', '#2b6cb0'], ['#f6ad55', '#9c4221']][hh % 8];
+          var th = el('div', { class: 'thumb', style: 'background:linear-gradient(150deg,' + COV[0] + ',' + COV[1] + ')' });
           if (p.scans && p.scans.length) { var u = URL.createObjectURL(p.scans[0].blob); urls.push(u); th.appendChild(el('img', { src: u, alt: '' })); }
           else th.appendChild(icon('music'));
           var chips = el('div', { class: 'chips' });
           if (!hasNotes) chips.appendChild(el('span', { class: 'chip warn', text: 'Noten fehlen' }));
-          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig'), { hands: S.pathMode === 'thorough' }), pd = PL.count(pth, p.path.done); if (pd) chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: pd >= pth.length ? 'Lernweg ★ geschafft' : 'Lernweg ' + pd + '/' + pth.length })); }
+          var lwBar = null;
+          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig'), { hands: S.pathMode === 'thorough' }), pd = PL.count(pth, p.path.done); if (pd) { var pts = 0; pth.forEach(function (l) { pts += (p.path.stars && p.path.stars[l.id]) || (p.path.done[l.id] >= l.need ? 3 : 0); }); chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: (pd >= pth.length ? 'Lernweg geschafft' : 'Lernweg ' + pd + '/' + pth.length) + ' · ★ ' + pts })); lwBar = el('div', { class: 'pbar-lw' }, [el('i', { style: 'width:' + Math.round(100 * pd / pth.length) + '%' })]); } }
           if (p.stats && p.stats.best != null) chips.appendChild(el('span', { class: 'chip ' + (p.stats.best >= 90 ? 'ok' : ''), text: 'Bestwert ' + p.stats.best + ' %' }));
           if (p.stats && p.stats.sec >= 30) chips.appendChild(el('span', { class: 'chip', text: fmtMin(p.stats.sec) }));
           if (hasNotes && !(p.stats && p.stats.sec >= 30)) chips.appendChild(el('span', { class: 'chip ok', text: 'Neu' }));
           if (p.scans && p.scans.length) chips.appendChild(el('span', { class: 'chip', text: p.scans.length + (p.scans.length === 1 ? ' Seite' : ' Seiten') }));
           var main = el('button', { class: 'piece', 'aria-label': (p.title || 'Ohne Titel') + ' öffnen', onclick: function () { showPractice(p.id); } }, [
-            th, el('div', { class: 'meta' }, [el('div', { class: 't', text: p.title || 'Ohne Titel' }), el('div', { class: 's', text: p.sub || (parsed && parsed.ok ? Math.max(1, parsed.score.measures.length) + ' Takte' : 'Nur Scan') }), chips])
+            th, el('div', { class: 'meta' }, [el('div', { class: 't', text: p.title || 'Ohne Titel' }), el('div', { class: 's', text: p.sub || (parsed && parsed.ok ? Math.max(1, parsed.score.measures.length) + ' Takte' : 'Nur Scan') }), chips, lwBar])
           ]);
           list.appendChild(el('div', { style: 'position:relative' }, [main,
             el('div', { style: 'position:absolute;right:6px;top:6px;display:flex;gap:0' }, [
@@ -5640,7 +5705,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var big = el('div', { class: 'st-big', hidden: true });
     var heardEl = el('div', { class: 'st-heard', hidden: true, 'aria-live': 'off', title: 'Was Tasto gerade hört' }, [icon('mic'), el('b', { class: 'kib', text: 'KI' }), el('span', { text: '…' })]);
     var wrongEl = el('div', { class: 'st-wrong', hidden: true, 'aria-live': 'polite' });
-    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(wrongEl); fall.appendChild(big); fall.appendChild(heardEl);
+    var askEl = el('div', { class: 'st-ask', hidden: true });
+    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(wrongEl); fall.appendChild(askEl); fall.appendChild(big); fall.appendChild(heardEl);
     var keysBox = el('div', { class: 'st-keys' });
     stage.appendChild(hud); stage.appendChild(lvlBar); stage.appendChild(drawer); stage.appendChild(scorePanel); stage.appendChild(fall); stage.appendChild(keysBox);
     root.appendChild(stage);
@@ -5736,7 +5802,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function fingerOf(s, n) { return fingers[s.t + ':' + n.midi] || 0; }
     function noteLabel(n, s) { var f = s && S.fingers !== false ? fingerOf(s, n) : 0; return '<span class="' + (n.hand.indexOf('R') >= 0 ? 'r' : 'l') + '">' + n.name.replace(/(\D+)(-?\d+)$/, '$1<sub>$2</sub>') + (f ? '<b class="fg">' + f + '</b>' : '') + '</span>'; }
     function showStep(i, quiet) {
-      var s = st.steps[i]; st.i = i; st.stepStart = perf();
+      var s = st.steps[i]; st.i = i; st.stepStart = perf(); if (st.askFor !== i) hideAsk();
       if (!s) { kb.setTargets({}); updateStatus(); return; }
       var map = {}, fmap = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; fmap[n.midi] = fingerOf(s, n); });
       kb.setTargets(map, S.fingers !== false ? fmap : null); kb.reveal(s.notes.map(function (n) { return n.midi; }));
@@ -5766,6 +5832,36 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     // falscher Ton: nur anzeigen (rote Taste + Notenname), nichts blendet sich auf; verschwindet beim nächsten richtigen Ton
     function showWrong(m) { kb.markWrong(m); wrongEl.textContent = '✗ ' + PC.midiLabel(m) + ' ist falsch'; wrongEl.hidden = false; wrongEl.classList.remove('pulse'); void wrongEl.offsetWidth; wrongEl.classList.add('pulse'); }
     function clearWrong() { kb.clearWrong(); wrongEl.hidden = true; }
+    /* ------ Selbst lernen: Akkord unvollständig, ein Ton nur schwach gehört → kurz nachfragen (ohne Fenster) ------ */
+    var askT = 0;
+    function hideAsk() { askEl.hidden = true; clear(askEl); }
+    function checkAsk(now) {
+      if (now - askT < 0.25) return; askT = now;
+      var s = st.steps[st.i];
+      if (!askEl.hidden) { if (!s || st.askFor !== st.i) hideAsk(); return; }
+      if (st.mode !== 'wait' || st.input !== 'mic' || st.done || !mic.det || !mic.det.evidence || !s || s.notes.length < 2 || st.askedStep === st.i) return;
+      var gotN = Object.keys(st.got).length, tg = s.notes.map(function (n) { return n.midi; });
+      if (!gotN || gotN >= tg.length || now - st.gotT < 1.6) return;
+      var miss = tg.filter(function (m) { return !st.got[m]; }), cand = [];
+      miss.forEach(function (m) {
+        var ev = mic.det.evidence(m, now, tg);
+        var some = ev.ki ? (ev.nt >= 0.08 || ev.on >= 0.15) && !(ev.oc >= 0.5 && ev.nt < 0.1) : ev.sal >= 0.2;
+        if (some) cand.push({ m: m, ev: ev });
+      });
+      if (cand.length !== miss.length) return; // ein Ton fehlt wirklich (gar nicht gehört) → nicht nachfragen
+      st.askedStep = st.i; st.askFor = st.i;
+      clear(askEl);
+      askEl.appendChild(el('b', { text: 'Hast du ' + cand.map(function (c) { return PC.midiLabel(c.m); }).join(' + ') + ' gespielt?' }));
+      askEl.appendChild(el('span', { text: 'Tasto hat ' + (cand.length > 1 ? 'diese Töne' : 'diesen Ton') + ' im Akkord nur leise gehört. Mit „Ja“ lernt Tasto, wie er bei dir klingt, und erkennt ihn künftig von selbst.' }));
+      askEl.appendChild(el('button', { class: 'yes', onclick: function () {
+        // Ja: Tasto merkt sich, wie dieser Ton bei dir im Zusammenklang klingt, und erkennt ihn künftig von selbst
+        cand.forEach(function (c) { mic.det.teachChord(c.m, c.ev.sal, c.ev.nt, c.ev.on, true); });
+        mergeLearnCh(mic.det); hideAsk();
+        if (st.askFor === st.i && st.steps[st.i] === s) { tg.forEach(function (m) { st.got[m] = 1; }); st.lastLearnMsg = perf(); completeStep(); }
+      } }, ['Ja, gespielt']));
+      askEl.appendChild(el('button', { onclick: function () { hideAsk(); } }, ['Nein']));
+      askEl.hidden = false;
+    }
     /* ------ Im Lied blättern: im Balkenbereich nach unten streichen = weiter, nach oben = zurück ------ */
     var drag = null, dragTick = null;
     function canScroll() { return !st.play && !st.demo && st.steps.length > 0; }
@@ -5848,6 +5944,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           if (hs.length) { lastHeard = nowH; hSpan.textContent = hs.slice(0, 4).sort(function (a, b) { return a - b; }).map(PC.midiLabel).join(' '); heardEl.classList.add('on'); }
           else if (nowH - lastHeard > 0.6) { hSpan.textContent = db > -60 ? '…' : 'leise'; heardEl.classList.remove('on'); }
         }
+        checkAsk(nowH);
         if (db > -72) heardAt = perf();
         else if (!warned && perf() - heardAt > 8) { warned = true; toast('Das Mikrofon liefert kaum Ton. Prüfe die Mikrofon-Freigabe für Safari bzw. Chrome und ob ein Kopfhörer verbunden ist.', 6000); }
       })
