@@ -1,5 +1,5 @@
 /* Tasto – Offline-Speicher */
-var CACHE = 'tasto-202610311310';
+var CACHE = 'tasto-202610311515';
 var CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon-64.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
@@ -16,7 +16,8 @@ self.addEventListener('fetch', function (e) {
       .catch(function () { return caches.match('./index.html'); }));
     return;
   }
-  var cacheable = url.origin === self.location.origin || /fonts\.(googleapis|gstatic)\.com$|cdnjs\.cloudflare\.com$/.test(url.hostname);
+  if (/tromr-/.test(url.pathname)) return; // große Noten-KI: eigener Speicher in der App
+  var cacheable = url.origin === self.location.origin || /fonts\.(googleapis|gstatic)\.com$|cdnjs\.cloudflare\.com$|cdn\.jsdelivr\.net$/.test(url.hostname);
   if (!cacheable) return;
   e.respondWith(caches.match(req).then(function (hit) {
     var net = fetch(req).then(function (r) { if (r && (r.ok || r.type === 'opaque')) { var c = r.clone(); caches.open(CACHE).then(function (ca) { ca.put(req, c); }); } return r; });
