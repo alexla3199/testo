@@ -353,6 +353,28 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .path-lv.cur .n { background: var(--hand-l); color: #fff; }
 .path-lv.locked { opacity: .5; cursor: default; }
 .lv-stars { font-size: 30px; letter-spacing: 4px; color: #f2b134; text-align: center; }
+/* falscher Ton: bleibt sichtbar, bis wieder richtig gespielt wird */
+.st-wrong { position: absolute; z-index: 2; top: 58px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 99px; background: rgba(226, 68, 90, .92); color: #fff; font: 700 15px/1.2 var(--f-ui); white-space: nowrap; pointer-events: none; }
+.st-wrong.pulse { animation: bad .4s; }
+@media (max-height: 500px) { .st-wrong { top: 44px; font-size: 13px; } }
+.key.wr { background: linear-gradient(180deg, #ff9aa5, #e2445a) !important; box-shadow: inset 0 0 0 2px #fff3; }
+.st-fall { touch-action: none; }
+/* Level-Band: Durchgänge, Ergebnis ohne Fenster */
+.st-lvl .lv-runs { display: grid; justify-items: center; flex: none; line-height: 1.1; }
+.st-lvl .lv-runs b { font-size: 15px; letter-spacing: 2px; color: #ffd3ad; }
+.st-lvl .lv-runs small { font-size: 10px; color: #c9d2e0; }
+.st-lvl.good { background: linear-gradient(90deg, rgba(31, 184, 119, .35), rgba(31, 184, 119, .1)); }
+.st-lvl.bad { background: linear-gradient(90deg, rgba(226, 68, 90, .35), rgba(226, 68, 90, .1)); }
+.st-lvl.warn { background: linear-gradient(90deg, rgba(240, 160, 40, .35), rgba(240, 160, 40, .1)); }
+.st-lvl .lv-t span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.path-lv .pc.st { color: #f2b134; letter-spacing: 1px; font-size: 13px; }
+.st-lvl.offer { background: linear-gradient(90deg, rgba(47, 134, 232, .3), rgba(47, 134, 232, .08)); }
+.path-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 2px 0 8px; }
+.path-mode button { display: grid; gap: 1px; padding: 8px; text-align: center; }
+.path-mode button small { font-size: 11px; font-weight: 500; opacity: .8; }
+.st-lvl { flex-wrap: wrap; }
+.st-lvl .lv-help { flex: 1 1 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+.st-lvl .lv-help .btn.sm { background: rgba(255, 255, 255, .92); color: #141821; }
 
 </style>
 <div id="app"></div>
@@ -3362,32 +3384,36 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
   }
   function hasHand(score, hand, a, b) { return PC.buildSteps(score, hand).some(function (s) { return s.bar >= a && s.bar <= b; }); }
   // Level: { id, sec, title, sub, a, b, hands, mode ('wait' | 'play'), pct (Tempo %), need (% zum Bestehen) }
-  function build(score) {
-    var secs = sections(score), lv = [], n = score.measures.length;
+  // opts.hands: erst jede Hand einzeln („gründlich“); sonst „zügig“: gleich beide Hände – für alle, die schon Klavier spielen können
+  function build(score, opts) {
+    opts = opts || {};
+    var secs = sections(score), lv = [], n = score.measures.length, slow = opts.hands ? 60 : 70, join = opts.hands ? 70 : 80;
     if (!secs.length) return [];
     var anyL = PC.buildSteps(score, 'L').length > 0, anyR = PC.buildSteps(score, 'R').length > 0;
     function bars(a, b) { return a === b ? 'Takt ' + a : 'Takt ' + a + '–' + b; }
     secs.forEach(function (s, k) {
       var R = anyR && hasHand(score, 'R', s.a, s.b), L = anyL && hasHand(score, 'L', s.a, s.b), id = 's' + s.a + '-' + s.b;
       var where = bars(s.a, s.b);
-      if (R && L) {
+      if (R && L && opts.hands) {
         lv.push({ id: id + 'R', sec: k, title: 'Rechte Hand', sub: where + ' · Üben (Tasto wartet)', a: s.a, b: s.b, hands: 'R', mode: 'wait', pct: 100, need: 90 });
         lv.push({ id: id + 'L', sec: k, title: 'Linke Hand', sub: where + ' · Üben (Tasto wartet)', a: s.a, b: s.b, hands: 'L', mode: 'wait', pct: 100, need: 90 });
       }
       lv.push({ id: id + 'B', sec: k, title: R && L ? 'Beide Hände' : R ? 'Rechte Hand' : 'Linke Hand', sub: where + ' · Üben (Tasto wartet)', a: s.a, b: s.b, hands: R && L ? 'RL' : R ? 'R' : 'L', mode: 'wait', pct: 100, need: 90 });
-      lv.push({ id: id + 'T', sec: k, title: 'Im Takt, langsam', sub: where + ' · 60 % Tempo', a: s.a, b: s.b, hands: 'RL', mode: 'play', pct: 60, need: 90 });
-      if (k > 0) lv.push({ id: 'c1-' + s.b, sec: k, title: 'Verbinden', sub: bars(1, s.b) + ' im Takt · 70 % Tempo', a: 1, b: s.b, hands: 'RL', mode: 'play', pct: 70, need: 85, join: true });
+      lv.push({ id: id + 'T', sec: k, title: 'Im Takt, langsam', sub: where + ' · ' + slow + ' % Tempo', a: s.a, b: s.b, hands: R && L ? 'RL' : R ? 'R' : 'L', mode: 'play', pct: slow, need: 90 });
+      if (k > 0) lv.push({ id: 'c1-' + s.b, sec: k, title: 'Verbinden', sub: bars(1, s.b) + ' im Takt · ' + join + ' % Tempo', a: 1, b: s.b, hands: 'RL', mode: 'play', pct: join, need: 85, join: true });
     });
-    lv.push({ id: 'f85', sec: secs.length, title: 'Ganzes Lied', sub: bars(1, n) + ' im Takt · 85 % Tempo', a: 1, b: n, hands: 'RL', mode: 'play', pct: 85, need: 85, whole: true });
+    if (opts.hands || secs.length > 2) lv.push({ id: 'f85', sec: secs.length, title: 'Ganzes Lied', sub: bars(1, n) + ' im Takt · 85 % Tempo', a: 1, b: n, hands: 'RL', mode: 'play', pct: 85, need: 85, whole: true });
     lv.push({ id: 'f100', sec: secs.length, title: 'Ganzes Lied im Originaltempo', sub: bars(1, n) + ' · 100 % Tempo', a: 1, b: n, hands: 'RL', mode: 'play', pct: 100, need: 90, whole: true, last: true });
     lv.forEach(function (l, i) { l.n = i + 1; });
     return lv;
   }
+  // freiwillige Hilfe, wenn ein Abschnitt hakt: eine Hand allein (zählt nicht für den Lernweg)
+  function helper(l, hand) { return { id: l.id + '-' + hand, helper: true, back: l, sec: l.sec, n: l.n, title: (hand === 'R' ? 'Rechte' : 'Linke') + ' Hand allein', sub: (l.a === l.b ? 'Takt ' + l.a : 'Takt ' + l.a + '–' + l.b) + ' · Üben (Tasto wartet)', a: l.a, b: l.b, hands: hand, mode: 'wait', pct: 100, need: 90 }; }
   // Fortschritt: done = { id: bestPct }; nächstes offenes Level = erstes nicht bestandenes
   function next(levels, done) { for (var i = 0; i < levels.length; i++) if (!(done && done[levels[i].id] >= levels[i].need)) return levels[i]; return null; }
   function unlocked(levels, done, l) { var nx = next(levels, done); return !nx || l.n <= nx.n; }
   function count(levels, done) { return levels.filter(function (l) { return done && done[l.id] >= l.need; }).length; }
-  return { sections: sections, build: build, next: next, unlocked: unlocked, count: count };
+  return { sections: sections, build: build, helper: helper, next: next, unlocked: unlocked, count: count };
 });
 
 ;
@@ -4024,7 +4050,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.4', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.5', VERSION_DATE = '31.10.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -4431,6 +4457,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     clearTimeout(this.timers[m]);
     this.timers[m] = setTimeout(function () { k.classList.remove(kind); }, 380);
   };
+  // falsch gespielter Ton bleibt rot, bis wieder richtig gespielt wird
+  Keyboard.prototype.markWrong = function (m) { this.clearWrong(); var k = this.keys[m]; if (k) { k.classList.add('wr'); this.wrongKey = k; } };
+  Keyboard.prototype.clearWrong = function () { if (this.wrongKey) { this.wrongKey.classList.remove('wr'); this.wrongKey = null; } };
   Keyboard.prototype.nudge = function (dir) { this.scrollTo(this.scroller.scrollLeft + dir * this.kw * 7); };
   Keyboard.prototype.scrollTo = function (x) {
     x = clamp(x, 0, Math.max(0, this.inner.scrollWidth - this.scroller.clientWidth));
@@ -4850,7 +4879,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           else th.appendChild(icon('music'));
           var chips = el('div', { class: 'chips' });
           if (!hasNotes) chips.appendChild(el('span', { class: 'chip warn', text: 'Noten fehlen' }));
-          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig')), pd = PL.count(pth, p.path.done); if (pd) chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: pd >= pth.length ? 'Lernweg ★ geschafft' : 'Lernweg ' + pd + '/' + pth.length })); }
+          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig'), { hands: S.pathMode === 'thorough' }), pd = PL.count(pth, p.path.done); if (pd) chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: pd >= pth.length ? 'Lernweg ★ geschafft' : 'Lernweg ' + pd + '/' + pth.length })); }
           if (p.stats && p.stats.best != null) chips.appendChild(el('span', { class: 'chip ' + (p.stats.best >= 90 ? 'ok' : ''), text: 'Bestwert ' + p.stats.best + ' %' }));
           if (p.stats && p.stats.sec >= 30) chips.appendChild(el('span', { class: 'chip', text: fmtMin(p.stats.sec) }));
           if (hasNotes && !(p.stats && p.stats.sec >= 30)) chips.appendChild(el('span', { class: 'chip ok', text: 'Neu' }));
@@ -5406,8 +5435,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var notesBtn = el('button', { class: 'st-icon', 'aria-label': 'Noten anzeigen', 'aria-pressed': 'false', onclick: function () { S.stageScore = !S.stageScore; saveSettings(); renderScorePanel(); } }, [icon('music')]);
     var micDot = el('span', { class: 'st-mic', hidden: true, title: 'Mikrofon hört zu' }, [icon('mic'), el('i')]);
     // Lernweg: Level-Knopf in der Kopfzeile, Banner während eines Levels
-    var PATH = PL.build(PA.arrange(base, 'orig'));
-    piece.path = piece.path || { done: {} }; piece.path.done = piece.path.done || {};
+    var PATH = PL.build(PA.arrange(base, 'orig'), { hands: S.pathMode === 'thorough' });
+    piece.path = piece.path || { done: {} }; piece.path.done = piece.path.done || {}; piece.path.stars = piece.path.stars || {};
+    var P = piece.path, RUNS = 3, lvlApplying = false, lvlTimer = null, lvlMsg = null;
     var pathBtn = el('button', { class: 'st-path', 'aria-label': 'Lernweg', onclick: function () { showPath(); } }, [icon('flame'), el('span')]);
     var hud = el('div', { class: 'st-hud' }, [
       el('button', { class: 'st-icon', 'aria-label': 'Zur Bibliothek', onclick: function () { showLibrary(); } }, [icon('back')]),
@@ -5485,7 +5515,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var pill = el('div', { class: 'st-pill', 'aria-live': 'polite' }), prog = el('div', { class: 'st-prog' }, [el('i')]);
     var big = el('div', { class: 'st-big', hidden: true });
     var heardEl = el('div', { class: 'st-heard', hidden: true, 'aria-live': 'off', title: 'Was Tasto gerade hört' }, [icon('mic'), el('b', { class: 'kib', text: 'KI' }), el('span', { text: '…' })]);
-    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(big); fall.appendChild(heardEl);
+    var wrongEl = el('div', { class: 'st-wrong', hidden: true, 'aria-live': 'polite' });
+    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(wrongEl); fall.appendChild(big); fall.appendChild(heardEl);
     var keysBox = el('div', { class: 'st-keys' });
     stage.appendChild(hud); stage.appendChild(lvlBar); stage.appendChild(drawer); stage.appendChild(scorePanel); stage.appendChild(fall); stage.appendChild(keysBox);
     root.appendChild(stage);
@@ -5528,6 +5559,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     }
     function relayout() { range = fitRange(); kb.setRange(range.lo, range.hi); showStep(st.i, true); if (!scorePanel.hidden) notation.render(); }
     function curTick() {
+      if (dragTick != null) { smoothTick = dragTick; lastFrame = perf(); return dragTick; }
       if (st.demo) return st.demo.tStart + (Snd.now() - st.demo.base) / spt();
       if (st.play) return st.play.tStart + (perf() - st.play.t0) / spt();
       var s = st.steps[st.i], target = s ? s.t : 0, now = perf(), dt = Math.min(0.1, now - (lastFrame || now)); lastFrame = now;
@@ -5601,6 +5633,43 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       prog.title = s ? 'Takt ' + s.bar + ' von ' + nb : '';
     }
     function flashPill(kind) { pill.classList.remove('good', 'bad'); void pill.offsetWidth; pill.classList.add(kind); }
+    // falscher Ton: nur anzeigen (rote Taste + Notenname), nichts blendet sich auf; verschwindet beim nächsten richtigen Ton
+    function showWrong(m) { kb.markWrong(m); wrongEl.textContent = '✗ ' + PC.midiLabel(m) + ' ist falsch'; wrongEl.hidden = false; wrongEl.classList.remove('pulse'); void wrongEl.offsetWidth; wrongEl.classList.add('pulse'); }
+    function clearWrong() { kb.clearWrong(); wrongEl.hidden = true; }
+    /* ------ Im Lied blättern: im Balkenbereich nach unten streichen = weiter, nach oben = zurück ------ */
+    var drag = null, dragTick = null;
+    function canScroll() { return !st.play && !st.demo && st.steps.length > 0; }
+    fall.addEventListener('pointerdown', function (e) {
+      if (e.button > 0 || !canScroll()) return;
+      drag = { id: e.pointerId, y0: e.clientY, t0: curTick(), on: false, hist: [[perf(), e.clientY]] };
+    });
+    fall.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dy = e.clientY - drag.y0;
+      if (!drag.on) {
+        if (Math.abs(dy) < 10) return;
+        if (st.lvl) { drag = null; flashLvlMsg('Im Level läuft der Abschnitt von vorn – zum Blättern das Level mit × beenden.'); return; }
+        drag.on = true; try { fall.setPointerCapture(e.pointerId); } catch (er) { /* ignorieren */ }
+      }
+      var r = loopRange(), lo = st.steps[r[0]].t - TPQ, hi = st.steps[r[1]].t, pxT = spt() * S.pps;
+      dragTick = clamp(drag.t0 + dy / pxT, lo, hi);
+      drag.hist.push([perf(), e.clientY]); if (drag.hist.length > 6) drag.hist.shift();
+      e.preventDefault();
+    });
+    function endDrag(e) {
+      if (!drag || (e && e.pointerId !== drag.id)) return;
+      var d = drag; drag = null;
+      if (!d.on || dragTick == null) { dragTick = null; return; }
+      // Schwung: kurzes schnelles Streichen fährt etwas weiter
+      var h = d.hist, v = 0; if (h.length >= 2) { var a = h[0], b = h[h.length - 1]; if (b[0] - a[0] > 0.01) v = (b[1] - a[1]) / (b[0] - a[0]); }
+      var r = loopRange(), pxT = spt() * S.pps, target = dragTick + clamp(v * 0.25, -900, 900) / pxT;
+      var best = r[0], bd = 1e18;
+      for (var j = r[0]; j <= r[1]; j++) { var dd = Math.abs(st.steps[j].t - target); if (dd < bd) { bd = dd; best = j; } }
+      smoothTick = dragTick; dragTick = null;
+      st.got = {}; st.gotT = 0; st.done = false; clearWrong();
+      showStep(best);
+    }
+    fall.addEventListener('pointerup', endDrag); fall.addEventListener('pointercancel', endDrag);
 
     /* ------ Einstellungen im Klappfeld ------ */
     function setMode(m) { lvlOff(); stopAll(); st.mode = m; st.stats = { hit: 0, miss: 0, wrong: 0, loops: 0 }; notation.clearMarks(); restart(); renderAll(); if (m !== 'wait') toggleDrawer(false); }
@@ -5704,12 +5773,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var tg = s.notes.map(function (n) { return n.midi; });
       if (tg.indexOf(m) >= 0) {
         if (!st.got[m]) { st.got[m] = 1; if (Object.keys(st.got).length === 1) st.gotT = t; }
-        kb.flash(m, 'ok'); falls.burst(m, 'ok');
+        kb.flash(m, 'ok'); falls.burst(m, 'ok'); clearWrong();
         var n = Object.keys(st.got).length;
         // jeder Ton des Akkords muss wirklich angeschlagen sein – nichts wird durchgewunken
         if (n === tg.length) completeStep();
       } else {
-        st.stats.wrong++; kb.flash(m, 'bad'); falls.burst(m, 'bad'); flashPill('bad');
+        st.stats.wrong++; kb.flash(m, 'bad'); falls.burst(m, 'bad'); flashPill('bad'); showWrong(m);
       }
     }
     function completeStep() {
@@ -5745,7 +5814,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     /* Im Takt */
     function startPlay() {
       stopAll(); Snd.resume(); toggleDrawer(false);
-      var r = loopRange(), s0 = st.steps[r[0]]; if (!s0) return;
+      var r = loopRange(); if (!st.lvl && st.i > r[0] && st.i <= r[1]) r = [st.i, r[1]]; // ab der Stelle, an die du geblättert hast
+      var s0 = st.steps[r[0]]; if (!s0) return; clearWrong();
       var m = score.meter, bt = beatTicks(m), beatSec = bt * spt(), nBeats = Math.max(1, Math.round(m.ticks / bt));
       var lead = 0.3, t0 = perf() + lead + nBeats * beatSec, a0 = Snd.now() + lead;
       var p = { a: r[0], b: r[1], cur: r[0], judge: r[0], done: {}, got: {}, miss: {}, win: clamp(beatSec * 0.4, 0.2, 0.42), beatSec: beatSec, nBeats: nBeats, perf0: perf() + lead, audio0: a0, tStart: s0.t, t0: t0,
@@ -5793,11 +5863,11 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         if (d <= p.win && st.steps[j].notes.some(function (n) { return n.midi === m; }) && (!best || d < best.d)) best = { j: j, d: d };
       }
       if (best) {
-        var g = p.got[best.j] = p.got[best.j] || {}; g[m] = 1; kb.flash(m, 'ok'); falls.burst(m, 'ok');
+        var g = p.got[best.j] = p.got[best.j] || {}; g[m] = 1; kb.flash(m, 'ok'); falls.burst(m, 'ok'); clearWrong();
         if (Object.keys(g).length >= st.steps[best.j].notes.length) {
           if (!p.done[best.j]) { p.done[best.j] = true; st.stats.hit++; notation.mark(st.steps[best.j].evIds, 'hit'); flashPill('good'); }
         }
-      } else { st.stats.wrong++; kb.flash(m, 'bad'); falls.burst(m, 'bad'); flashPill('bad'); }
+      } else { st.stats.wrong++; kb.flash(m, 'bad'); falls.burst(m, 'bad'); flashPill('bad'); showWrong(m); }
     }
     function finishPlay() {
       var p = st.play; stopAll();
@@ -5834,22 +5904,54 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       persist();
     }
     /* ------ Lernweg ------ */
-    var lvlApplying = false;
-    function lvlOff() { if (lvlApplying || !st.lvl) return; st.lvl = null; renderLvl(); }
-    function lvlDone(l) { return piece.path.done[l.id] >= l.need; }
+    // Jedes Level 3× hintereinander sauber spielen (Mikrofon/MIDI), dann gibt es bis zu 5 Sterne = Punkte und das nächste Level.
+    // Während des Spielens springt nichts auf: Durchgänge und Ergebnis stehen im Level-Band oben, danach geht es von selbst weiter.
+    function lvlOff() { if (lvlApplying || !st.lvl) return; st.lvl = null; clearTimeout(lvlTimer); renderLvl(); }
+    function lvlDone(l) { return P.done[l.id] >= l.need; }
+    function runStars(pct) { return pct >= 100 ? 5 : pct >= 97 ? 4 : pct >= 94 ? 3 : 2; }
+    function starStr(n) { var o = ''; for (var i = 0; i < 5; i++) o += i < n ? '★' : '☆'; return o; }
+    function points() { var t = 0; PATH.forEach(function (l) { t += P.stars[l.id] || (lvlDone(l) ? 3 : 0); }); return t; }
+    function flashLvlMsg(t, kind) { lvlMsg = { t: t, kind: kind || '' }; renderLvl(); }
     function renderLvl() {
-      var nDone = PL.count(PATH, piece.path.done);
-      pathBtn.lastChild.textContent = PATH.length ? (nDone >= PATH.length ? '★' : (PL.next(PATH, piece.path.done) || {}).n + '/' + PATH.length) : '';
+      var nDone = PL.count(PATH, P.done), nx = PL.next(PATH, P.done);
+      pathBtn.lastChild.textContent = PATH.length ? (nDone >= PATH.length ? '★ ' + points() : 'Lv ' + (nx || {}).n) : '';
       pathBtn.hidden = !PATH.length;
-      var l = st.lvl; lvlBar.hidden = !l; clear(lvlBar);
+      var l = st.lvl; clear(lvlBar); lvlBar.className = 'st-lvl' + (lvlMsg && lvlMsg.kind ? ' ' + lvlMsg.kind : '');
+      // noch nicht begonnen: Lernweg anbieten (ein Tipp, und es geht los)
+      if (!l && PATH.length && !nDone && !P.hide && nx) {
+        lvlBar.hidden = false; lvlBar.classList.add('offer');
+        lvlBar.appendChild(el('div', { class: 'lv-t' }, [el('b', { text: 'Lernweg: in ' + PATH.length + ' Levels zum ganzen Lied' }), el('span', { text: 'Level 1: ' + nx.title + ' · ' + nx.sub })]));
+        lvlBar.appendChild(el('button', { class: 'btn sm primary', onclick: function () { startLevel(nx); } }, ['Starten']));
+        lvlBar.appendChild(el('button', { class: 'st-icon', 'aria-label': 'Ausblenden', onclick: function () { P.hide = true; persist(); renderLvl(); } }, [icon('close')]));
+        return;
+      }
+      lvlBar.hidden = !l;
       if (!l) return;
-      lvlBar.appendChild(el('div', { class: 'lv-t' }, [el('b', { text: 'Level ' + l.n + ' von ' + PATH.length + ': ' + l.title }), el('span', { text: l.sub + ' · Ziel ' + l.need + ' %' + (st.input === 'tap' ? ' · zählt nur mit Mikrofon/MIDI' : '') })]));
+      var run = st.lvlRun || { ok: 0 }, dots = '';
+      for (var i = 0; i < RUNS; i++) dots += i < run.ok ? '●' : '○';
+      var line2 = lvlMsg ? lvlMsg.t : l.sub + ' · Ziel ' + l.need + ' %' + (st.input === 'tap' ? ' · zählt nur mit Mikrofon/MIDI' : '');
+      var need = l.helper ? 2 : RUNS; dots = ''; for (i = 0; i < need; i++) dots += i < run.ok ? '●' : '○';
+      lvlBar.appendChild(el('div', { class: 'lv-t' }, [el('b', { text: l.helper ? 'Hilfe · ' + l.title : 'Level ' + l.n + '/' + PATH.length + ' · ' + l.title }), el('span', { text: line2 })]));
+      lvlBar.appendChild(el('div', { class: 'lv-runs', title: 'Durchgänge hintereinander' }, [el('b', { text: dots }), el('small', { text: 'Durchgang ' + Math.min(need, run.ok + 1) + '/' + need })]));
+      if (lvlMsg && lvlMsg.next) lvlBar.appendChild(el('button', { class: 'btn sm primary', onclick: lvlMsg.next }, ['Weiter']));
       lvlBar.appendChild(el('button', { class: 'btn sm', onclick: showPath }, ['Lernweg']));
-      lvlBar.appendChild(el('button', { class: 'st-icon', 'aria-label': 'Level beenden', onclick: function () { st.lvl = null; renderLvl(); } }, [icon('close')]));
+      lvlBar.appendChild(el('button', { class: 'st-icon', 'aria-label': 'Level beenden', onclick: endLevel }, [icon('close')]));
+      if (lvlMsg && lvlMsg.btns) lvlBar.appendChild(el('div', { class: 'lv-help' }, lvlMsg.btns.map(function (b) { return el('button', { class: 'btn sm', onclick: b[1] }, [b[0]]); })));
     }
-    function startLevel(l) {
+    // Level beenden: zurück zum freien Üben mit deinen vorherigen Einstellungen (ganzes Stück)
+    function endLevel() {
+      clearTimeout(lvlTimer); var pre = st.preLvl; st.lvl = null; lvlMsg = null; st.preLvl = null;
+      lvlApplying = true; stopAll();
+      if (pre) {
+        if (st.level !== pre.level) { st.level = pre.level; applyScore(); }
+        st.hands = pre.hands; st.steps = PC.buildSteps(score, st.hands); notation.setSteps(st.steps);
+        st.pct = pre.pct; st.loop = pre.loop; notation.setLoop(st.loop); st.mode = pre.mode;
+      }
+      persist(); restart(); renderAll(); lvlApplying = false; renderLvl();
+    }
+    function applyLevel(l) {
       lvlApplying = true;
-      stopAll(); toggleDrawer(false);
+      stopAll(); toggleDrawer(false); clearTimeout(lvlTimer);
       st.lvl = l;
       if (st.level !== 'orig') { st.level = 'orig'; applyScore(); }
       st.hands = l.hands; st.steps = PC.buildSteps(score, st.hands); notation.setSteps(st.steps);
@@ -5857,49 +5959,86 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       st.mode = l.mode;
       persist(); restart(); renderAll();
       lvlApplying = false;
-      renderLvl();
-      toast('Level ' + l.n + ': ' + l.title + ' – ' + l.sub + (l.mode === 'play' ? '. Tippe auf ▶, Tasto zählt ein.' : '. Spiel los, Tasto wartet auf jeden Ton.'), 3800);
+    }
+    function startLevel(l) {
+      if (!st.lvl) st.preLvl = { loop: st.loop, hands: st.hands, pct: st.pct, mode: st.mode, level: st.level }; // zum Zurückkehren beim Beenden
+      st.lvlRun = { ok: 0, pcts: [], fails: 0 }; lvlMsg = null;
+      applyLevel(l); renderLvl();
+      if (l.helper) { flashLvlMsg(l.sub + ' – 2× sauber, dann geht es zurück zu Level ' + l.back.n + '.'); return; }
+      flashLvlMsg(l.mode === 'play' ? 'Tippe auf ▶ – Tasto zählt ein. ' + RUNS + '× hintereinander sauber = Level geschafft.' : 'Spiel los – Tasto wartet auf jeden Ton. ' + RUNS + '× hintereinander sauber = Level geschafft.');
+    }
+    // hakt es: Hilfe anbieten (eine Hand allein bzw. langsamer) – freiwillig, zählt nicht
+    function helpBtns(l) {
+      if (l.mode === 'wait' && l.hands === 'RL') return [['Nur rechts', function () { startLevel(PL.helper(l, 'R')); }], ['Nur links', function () { startLevel(PL.helper(l, 'L')); }]];
+      if (l.mode === 'play' && l.pct > 50) { var slow = Object.assign({}, l, { id: l.id + '-slow', helper: true, back: l, title: 'Langsamer im Takt', pct: Math.max(45, l.pct - 20), sub: (l.a === l.b ? 'Takt ' + l.a : 'Takt ' + l.a + '–' + l.b) + ' · ' + Math.max(45, l.pct - 20) + ' % Tempo' }); return [['Langsamer üben', function () { startLevel(slow); }], ['Ohne Takt', function () { startLevel(Object.assign({}, slow, { id: l.id + '-wait', mode: 'wait', pct: 100, title: 'Ohne Takt üben', sub: slow.sub.replace(/ · \d+ % Tempo/, ' · Tasto wartet') })); }]]; }
+      return null;
+    }
+    // nächster Durchgang desselben Levels (ohne Fenster): kurz das Ergebnis im Band, dann geht es von selbst los
+    function nextRun(l, msg, kind) {
+      flashLvlMsg(msg, kind);
+      lvlTimer = setTimeout(function () {
+        if (st.lvl !== l || !root.contains(stage)) return;
+        var keep = lvlMsg; applyLevel(l); lvlMsg = keep; renderLvl();
+        if (l.mode === 'play') startPlay();
+      }, l.mode === 'play' ? 2600 : 1800);
     }
     function levelDone(pct, bars) {
       var l = st.lvl; st.done = true; stopAll();
-      var counts = st.input === 'mic' || st.input === 'midi', ok = counts && pct >= l.need;
-      if (ok) { if (!(piece.path.done[l.id] >= pct)) piece.path.done[l.id] = pct; piece.path.at = Date.now(); persist(); }
-      var nx = PL.next(PATH, piece.path.done), nums = [[pct + ' %', l.mode === 'play' ? 'Treffer' : 'Genauigkeit'], [String(st.stats.wrong), 'falsche Töne']];
-      if (l.mode === 'play') nums.splice(1, 0, [String(st.stats.miss), 'verpasst']);
+      var run = st.lvlRun = st.lvlRun || { ok: 0, pcts: [] };
+      if (!(st.input === 'mic' || st.input === 'midi')) return nextRun(l, pct + ' % – zählt nicht: Levels gelten nur, wenn Tasto über Mikrofon oder MIDI hört, was du spielst.', 'warn');
+      if (pct < l.need) {
+        var had = run.ok; run.ok = 0; run.pcts = []; run.fails = (run.fails || 0) + 1;
+        var hb = !l.helper && run.fails >= 2 ? helpBtns(l) : null;
+        nextRun(l, pct + ' % – Ziel ' + l.need + ' %.' + (bars && bars.length ? ' Schwierig: Takt ' + bars.join(', ') + '.' : '') + (had ? ' Die Serie beginnt neu.' : '') + (hb ? ' Hakt es? Probier eine Hilfe:' : ' Gleich nochmal.'), 'bad');
+        if (hb) { lvlMsg.btns = hb; renderLvl(); }
+        return;
+      }
+      run.ok++; run.pcts.push(pct); run.fails = 0;
+      if (l.helper) {
+        if (run.ok < 2) return nextRun(l, 'Sitzt fast: ' + pct + ' % – noch 1×.', 'good');
+        flashLvlMsg('Sitzt! Zurück zu Level ' + l.back.n + '.', 'good');
+        lvlTimer = setTimeout(function () { if (st.lvl === l && root.contains(stage)) startLevel(l.back); }, 1800);
+        return;
+      }
+      if (run.ok < RUNS) return nextRun(l, 'Durchgang ' + run.ok + ' geschafft: ' + pct + ' % ' + starStr(runStars(pct)) + ' – noch ' + (RUNS - run.ok) + '× hintereinander.', 'good');
+      // Level geschafft: Sterne aus den drei Durchgängen (5 = alle drei fehlerfrei)
+      var sum = 0; run.pcts.forEach(function (x) { sum += runStars(x); });
+      var stars = Math.floor(sum / run.pcts.length), avg = Math.round(run.pcts.reduce(function (a, b) { return a + b; }, 0) / run.pcts.length);
+      var newBest = !(P.stars[l.id] >= stars);
+      if (newBest) P.stars[l.id] = stars;
+      if (!(P.done[l.id] >= avg)) P.done[l.id] = avg;
+      P.at = Date.now(); persist();
+      var nx = PL.next(PATH, P.done);
+      st.lvlRun = { ok: RUNS, pcts: run.pcts };
+      if (!nx) { flashLvlMsg('Lied gemeistert! ' + starStr(stars) + ' · ' + points() + ' Punkte insgesamt.', 'good'); return; }
+      var go = function () { clearTimeout(lvlTimer); startLevel(nx); };
+      lvlMsg = { t: 'Level geschafft! ' + starStr(stars) + ' +' + stars + ' Punkte' + (stars < 5 ? ' (5 Sterne gibt es für 3 fehlerfreie Durchgänge)' : '') + ' – gleich geht es mit Level ' + nx.n + ' weiter.', kind: 'good', next: go };
       renderLvl();
-      if (!counts) {
-        resultBox('Gut gespielt – zählt aber noch nicht', nums, 'Levels zählen nur, wenn Tasto wirklich hört, was du spielst: schalte das Mikrofon ein (oder ein MIDI-Klavier) und spiel das Level nochmal.',
-          [['Lernweg', showPath], ['Mikrofon an & nochmal', function () { setInputKeep('mic'); startLevel(l); }, true]]);
-        return;
-      }
-      if (ok) {
-        var allDone = !nx;
-        resultBox(allDone ? 'Lied gemeistert!' : 'Level ' + l.n + ' geschafft!', nums,
-          allDone ? 'Du spielst das ganze Lied im Originaltempo. Stark!' : 'Als Nächstes – Level ' + nx.n + ': ' + nx.title + ' (' + nx.sub + ').',
-          allDone ? [['Lernweg', showPath], ['Nochmal', function () { startLevel(l); }, true]] : [['Nochmal', function () { startLevel(l); }], ['Weiter', function () { startLevel(nx); }, true]],
-          el('div', { class: 'lv-stars', text: pct >= 100 ? '★★★' : pct >= 95 ? '★★☆' : '★☆☆' }));
-        return;
-      }
-      resultBox('Noch nicht ganz', nums, 'Ziel sind ' + l.need + ' %, du hattest ' + pct + ' %.' + (bars && bars.length ? ' Schwierig waren die Takte ' + bars.join(', ') + '.' : '') + (l.mode === 'play' ? ' Tipp: erst nochmal ohne Takt üben – Tasto wartet dann auf dich.' : ' Spiel ruhig langsam, Tasto wartet auf jeden Ton.'),
-        [['Lernweg', showPath], ['Nochmal', function () { startLevel(l); }, true]]);
+      lvlTimer = setTimeout(function () { if (st.lvl === l && root.contains(stage)) go(); }, 5000);
     }
-    function setInputKeep(v) { var keep = st.lvl; lvlApplying = true; setInput(v); lvlApplying = false; st.lvl = keep; }
     function showPath() {
       overlay(function (box, close) {
         box.classList.add('pathbox');
-        var nDone = PL.count(PATH, piece.path.done), nx = PL.next(PATH, piece.path.done);
+        var nDone = PL.count(PATH, P.done), nx = PL.next(PATH, P.done);
         box.appendChild(el('h2', { text: 'Lernweg' }));
-        box.appendChild(el('p', { class: 'hint', text: 'Du baust das Lied Stück für Stück auf: jeder Abschnitt erst mit jeder Hand, dann mit beiden, dann im Takt – danach verbindest du ihn mit allem davor. Ein Level ist erst geschafft, wenn Tasto über das Mikrofon hört, dass du es sauber spielst.' }));
+        box.appendChild(el('p', { class: 'hint', text: 'Du baust das Lied Abschnitt für Abschnitt auf: erst ohne Takt (Tasto wartet auf dich), dann im Takt, dann verbindest du ihn mit allem davor – bis zum ganzen Lied im Originaltempo. Jedes Level ' + RUNS + '× hintereinander sauber; Tasto prüft über das Mikrofon. 3 fehlerfreie Durchgänge = 5 Sterne. Hakt eine Stelle, bietet Tasto Hilfen an (eine Hand allein, langsamer).' }));
+        var modeBox = el('div', { class: 'seg path-mode' });
+        [['fast', 'Zügig', 'gleich beide Hände'], ['thorough', 'Gründlich', 'erst jede Hand einzeln']].forEach(function (o) {
+          modeBox.appendChild(el('button', { 'aria-pressed': (S.pathMode || 'fast') === o[0] ? 'true' : 'false', onclick: function () {
+            S.pathMode = o[0]; saveSettings(); PATH = PL.build(PA.arrange(base, 'orig'), { hands: o[0] === 'thorough' }); if (st.lvl && !st.lvl.helper) { st.lvl = null; lvlMsg = null; } close(); renderLvl(); showPath();
+          } }, [el('b', { text: o[1] }), el('small', { text: o[2] })]));
+        });
+        box.appendChild(modeBox);
         box.appendChild(el('div', { class: 'meter' }, [el('i', { style: 'width:' + Math.round(100 * nDone / Math.max(1, PATH.length)) + '%' })]));
-        box.appendChild(el('p', { class: 'hint', text: nDone + ' von ' + PATH.length + ' Levels geschafft' }));
+        box.appendChild(el('p', { class: 'hint', text: nDone + ' von ' + PATH.length + ' Levels · ' + points() + ' von ' + PATH.length * 5 + ' Punkten' }));
         var listEl = el('div', { class: 'path-list' }), lastSec = -1, curEl = null;
         PATH.forEach(function (l) {
           if (l.sec !== lastSec) { lastSec = l.sec; listEl.appendChild(el('div', { class: 'path-sec', text: l.whole ? 'Zum Schluss' : 'Abschnitt ' + (l.sec + 1) + ' · ' + (l.a === l.b ? 'Takt ' + l.a : 'Takt ' + l.a + '–' + l.b) })); }
-          var done = lvlDone(l), open = PL.unlocked(PATH, piece.path.done, l), cur = nx && l.id === nx.id;
+          var done = lvlDone(l), open = PL.unlocked(PATH, P.done, l), cur = nx && l.id === nx.id, stv = P.stars[l.id];
           var b = el('button', { class: 'path-lv' + (done ? ' done' : '') + (cur ? ' cur' : '') + (!open ? ' locked' : ''), disabled: !open ? true : null, onclick: function () { close(); startLevel(l); } }, [
             el('span', { class: 'n', text: done ? '✓' : open ? String(l.n) : '🔒' }),
             el('div', {}, [el('b', { text: l.title }), el('span', { text: l.sub })]),
-            el('span', { class: 'pc', text: done ? piece.path.done[l.id] + ' %' : 'Ziel ' + l.need + ' %' })]);
+            el('span', { class: 'pc' + (done ? ' st' : ''), text: done ? (stv ? starStr(stv) : '✓ ' + P.done[l.id] + ' %') : 'Ziel ' + l.need + ' %' })]);
           if (cur) curEl = b;
           listEl.appendChild(b);
         });
@@ -5947,7 +6086,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       big.hidden = true; renderGo(); updateStatus();
     }
     function restart() {
-      stopAll(); st.done = false; st.got = {}; st.gotT = 0;
+      stopAll(); st.done = false; st.got = {}; st.gotT = 0; clearWrong();
       st.stats = { hit: 0, miss: 0, wrong: 0, loops: 0 }; notation.clearMarks();
       st.i = loopRange()[0]; showStep(st.i);
     }
@@ -5960,7 +6099,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       accEvents().forEach(function (e) { if (e.t >= t0 && e.t < t1) Snd.play(e.midi, b0 + (e.t - t0) * sp, Math.max(0.15, e.dur * sp * 0.95), 0.55); });
     }
     cleanup = function () {
-      window.removeEventListener('resize', onResize); stopAll(); stopInput(); falls.stop(); clearInterval(practiceTimer); Wake.off(); persist(); saveDays();
+      clearTimeout(lvlTimer); window.removeEventListener('resize', onResize); stopAll(); stopInput(); falls.stop(); clearInterval(practiceTimer); Wake.off(); persist(); saveDays();
       document.body.classList.remove('stage-on');
     };
   }
