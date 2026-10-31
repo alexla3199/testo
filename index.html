@@ -1928,6 +1928,146 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
 });
 
 ;
+/* Tasto – Lied aus Musik: Aufnahme/Datei → Hör-KI (Basic Pitch) über das ganze Stück → Noten → Tempo & Takt → ABC (rechte/linke Hand) */
+(function (root, f) { if (typeof module === 'object' && module.exports) module.exports = f(require('./ki.js')); else root.PX = f(root.PK); })(this, function (PK) {
+  'use strict';
+  var RATE = 22050, N = 43844, HOP = 256, NF = 172, OV = 30, USE = NF - 2 * OV, FPS = RATE / HOP;
+  // beliebige Abtastrate → 22050 Hz mono
+  function to22(ch, srcRate) {
+    if (srcRate === RATE) return ch;
+    var n = Math.floor(ch.length * RATE / srcRate), out = new Float32Array(n), step = srcRate / RATE, smooth = step > 1.5;
+    for (var j = 0; j < n; j++) {
+      var p = j * step, i0 = Math.floor(p), fr = p - i0, a, b;
+      if (smooth) { a = 0.25 * (ch[i0 - 1] || 0) + 0.5 * (ch[i0] || 0) + 0.25 * (ch[i0 + 1] || 0); b = 0.25 * (ch[i0] || 0) + 0.5 * (ch[i0 + 1] || 0) + 0.25 * (ch[i0 + 2] || 0); }
+      else { a = ch[i0] || 0; b = ch[i0 + 1] || 0; }
+      out[j] = a + (b - a) * fr;
+    }
+    return out;
+  }
+  // ganzes Stück in überlappenden 2-s-Fenstern auswerten
+  function analyze(ort, sess, pcm, onProgress, signal) {
+    var T = Math.ceil(pcm.length / HOP), nWin = Math.max(1, Math.ceil(T / USE)), onset = new Float32Array(T * 88), note = new Float32Array(T * 88), k = 0;
+    var win = new Float32Array(N);
+    function next() {
+      if (signal && signal.aborted) return Promise.reject(Object.assign(new Error('abgebrochen'), { name: 'AbortError' }));
+      if (k >= nWin) return Promise.resolve({ onset: onset, note: note, T: T });
+      var start = k * USE * HOP - OV * HOP;
+      for (var i = 0; i < N; i++) { var s = start + i; win[i] = s >= 0 && s < pcm.length ? pcm[s] : 0; }
+      return PK.run(ort, sess, win).then(function (r) {
+        for (var f = OV; f < NF - OV; f++) {
+          var g = k * USE + (f - OV); if (g >= T) break;
+          for (var p = 0; p < 88; p++) { onset[g * 88 + p] = r.onset[f * 88 + p]; note[g * 88 + p] = r.note[f * 88 + p]; }
+        }
+        k++; if (onProgress) onProgress(k / nWin);
+        return new Promise(function (res) { setTimeout(res, 0); }).then(next);
+      });
+    }
+    return next();
+  }
+  // Noten wie bei Basic Pitch: Anschlagsspitzen, verlängert solange der Ton klingt
+  function notes(res, o) {
+    o = o || {};
+    var T = res.T, on = res.onset, nt = res.note, thOn = o.onset || 0.6, thFr = o.frame || 0.3, minLen = o.minLen || 6, ghost = o.ghost || 0.6, out = [];
+    var used = new Uint8Array(T * 88);
+    for (var p = 0; p < 88; p++) {
+      for (var t = 1; t < T - 1; t++) {
+        var v = on[t * 88 + p];
+        if (v < thOn || v < on[(t - 1) * 88 + p] || v < on[(t + 1) * 88 + p]) continue;
+        if (used[t * 88 + p]) continue;
+        var e = t + 1, miss = 0;
+        while (e < T && miss < 3) { if (nt[e * 88 + p] >= thFr) miss = 0; else miss++; if (e > t + 1 && on[e * 88 + p] >= thOn && on[e * 88 + p] > on[(e - 1) * 88 + p] && nt[e * 88 + p] > 0) break; e++; }
+        e -= miss;
+        if (e - t < minLen) continue;
+        var amp = 0; for (var q = t; q < e; q++) { amp = Math.max(amp, nt[q * 88 + p]); used[q * 88 + p] = 1; }
+        if (amp < (o.vmin || 0.5)) continue;
+        out.push({ p: p + 21, s: t, e: e, v: amp, on: v });
+      }
+    }
+    // Oktav-Geister: gleichzeitiger, deutlich schwächerer Ton genau eine Oktave (oder Duodezime) über einem starken
+    out.sort(function (a, b) { return a.s - b.s || a.p - b.p; });
+    out = out.filter(function (n) { return !out.some(function (m) { return m !== n && Math.abs(m.s - n.s) <= 2 && (n.p - m.p === 12 || n.p - m.p === 19) && n.v < m.v * ghost && n.on < m.on * (ghost + 0.2); }); });
+    return out;
+  }
+  // Tempo (Schläge pro Minute) und Phase aus den Notenanfängen
+  function tempo(ns, T) {
+    var env = new Float32Array(T + 8);
+    ns.forEach(function (n) { var w = 0.5 + n.v; env[n.s] += w; env[n.s + 1] += w * 0.5; if (n.s > 0) env[n.s - 1] += w * 0.5; });
+    var best = null;
+    for (var bpm = 50; bpm <= 180; bpm += 0.5) {
+      var P = 60 / bpm * FPS, sc = 0;
+      // Treffer auf Schlägen und Achteln, mit leichter Vorliebe für 70–120 BPM
+      for (var lagMul = 1; lagMul <= 2; lagMul++) {
+        var L = P * lagMul, li = Math.round(L), fr = L - Math.floor(L), acc = 0;
+        for (var t = 0; t + li + 1 < T; t++) { if (!env[t]) continue; acc += env[t] * (env[Math.floor(t + L)] * (1 - fr) + env[Math.floor(t + L) + 1] * fr); }
+        sc += acc / lagMul;
+      }
+      var half = 0, Lh = P / 2; for (var t2 = 0; t2 + Lh + 1 < T; t2++) if (env[t2]) half += env[t2] * env[Math.round(t2 + Lh)];
+      sc += half * 0.3;
+      sc *= Math.exp(-Math.pow(Math.log(bpm / 95), 2) / (2 * 0.35 * 0.35));
+      if (!best || sc > best.sc) best = { bpm: bpm, sc: sc, P: P };
+    }
+    // Phase: Notenanfänge möglichst auf Sechzehntel-Raster
+    var P0 = best.P, bestPh = 0, bestV = -1;
+    for (var ph = 0; ph < P0; ph += 0.5) {
+      var v = 0; ns.forEach(function (n) { var x = (n.s - ph) / (P0 / 4); v += (0.5 + n.v) * Math.cos(2 * Math.PI * x); }); 
+      if (v > bestV) { bestV = v; bestPh = ph; }
+    }
+    return { bpm: best.bpm, P: P0, phase: bestPh };
+  }
+  var NAMES = ['C', '^C', 'D', '_E', 'E', 'F', '^F', 'G', '^G', 'A', '_B', 'B'];
+  function abcNote(m) { var pc = m % 12, oct = Math.floor(m / 12) - 1, s = NAMES[pc], k; if (oct >= 5) { s = s.replace(/[A-G]/, function (c) { return c.toLowerCase(); }); for (k = 6; k <= oct; k++) s += "'"; } if (oct <= 3) for (k = 3; k >= oct; k--) s += ','; return s; }
+  function len(u) { return u === 1 ? '' : String(u); }
+  // Noten → ABC, Raster 16tel, 4/4; Hände: über/unter einer gleitenden Grenze um das mittlere C
+  function toAbc(ns, T, o) {
+    o = o || {};
+    if (!ns.length) return null;
+    var tp = tempo(ns, T), g = tp.P / 4, beats = o.beats || 4, barU = beats * 4;
+    var q = ns.map(function (n) { var a = Math.round((n.s - tp.phase) / g), b = Math.max(a + 1, Math.round((n.e - tp.phase) / g)); return { p: n.p, a: a, b: b, v: n.v }; });
+    var a0 = Math.min.apply(null, q.map(function (n) { return n.a; }));
+    // Taktanfang: Verschiebung mit den meisten (Bass-)Anschlägen auf der Eins
+    var bestOff = 0, bestS = -1;
+    for (var off = 0; off < barU; off += 4) { var sc = 0; q.forEach(function (n) { if (((n.a - a0 - off) % barU + barU) % barU === 0) sc += n.p < 60 ? 2 : 1; }); if (sc > bestS) { bestS = sc; bestOff = off; } }
+    var base = a0 + bestOff - (bestOff ? barU : 0);
+    q.forEach(function (n) { n.a -= base; n.b -= base; });
+    // Hände trennen
+    var hands = { R: [], L: [] };
+    // Grenze je Zeitpunkt: größte Lücke zwischen gleichzeitig klingenden Tönen (zwischen G3 und G4), sonst mittleres C
+    var splitAt = {};
+    q.forEach(function (n) {
+      if (splitAt[n.a] != null) return;
+      var ps = q.filter(function (m) { return m.a <= n.a + 1 && m.b > n.a; }).map(function (m) { return m.p; }).sort(function (x, y) { return x - y; });
+      var sp = 60, gap = 0;
+      for (var i = 1; i < ps.length; i++) { var g2 = ps[i] - ps[i - 1], mid = (ps[i] + ps[i - 1]) / 2; if (g2 >= 5 && mid >= 52 && mid <= 68 && g2 > gap) { gap = g2; sp = ps[i]; } }
+      splitAt[n.a] = sp;
+    });
+    q.forEach(function (n) { (n.p >= splitAt[n.a] ? hands.R : hands.L).push(n); });
+    var nBars = Math.ceil(Math.max.apply(null, q.map(function (n) { return n.a + 1; })) / barU);
+    function bars(list) {
+      var out = [];
+      for (var bi = 0; bi < nBars; bi++) {
+        var s0 = bi * barU, s1 = s0 + barU, ev = list.filter(function (n) { return n.a >= s0 && n.a < s1; }).sort(function (x, y) { return x.a - y.a; });
+        var groups = []; ev.forEach(function (n) { var last = groups[groups.length - 1]; if (last && last.a === n.a) { if (last.ps.indexOf(n.p) < 0) last.ps.push(n.p); last.b = Math.max(last.b, n.b); } else groups.push({ a: n.a, b: n.b, ps: [n.p] }); });
+        var t = s0, parts = [];
+        groups.forEach(function (gr, k) {
+          if (gr.a > t) { parts.push('z' + len(gr.a - t)); t = gr.a; }
+          var nx = k + 1 < groups.length ? groups[k + 1].a : s1, d = Math.max(1, Math.min(gr.b, nx) - t);
+          gr.ps.sort(function (x, y) { return x - y; });
+          parts.push((gr.ps.length > 1 ? '[' + gr.ps.map(abcNote).join('') + ']' : abcNote(gr.ps[0])) + len(d)); t += d;
+        });
+        if (t < s1) parts.push('z' + len(s1 - t));
+        out.push(parts.join(' '));
+      }
+      var lines = []; for (var i = 0; i < out.length; i += 4) lines.push(out.slice(i, i + 4).join(' | ') + (i + 4 >= out.length ? ' |]' : ' |'));
+      return lines.join('\n');
+    }
+    var bpmQ = Math.round(tp.bpm);
+    var abc = ['X:1', 'T:' + (o.title || 'Aus Musik'), 'M:' + beats + '/4', 'L:1/16', 'Q:1/4=' + bpmQ, 'K:C', 'V:R clef=treble', bars(hands.R), 'V:L clef=bass', bars(hands.L)].join('\n') + '\n';
+    return { abc: abc, bpm: bpmQ, bars: nBars, notes: q.length };
+  }
+  return { RATE: RATE, FPS: FPS, to22: to22, analyze: analyze, notes: notes, tempo: tempo, toAbc: toAbc };
+});
+
+;
 /* Token-Listen des TrOMR-Notenmodells (homr, AGPL-3.0, github.com/liebharc/homr) – nachgebaut für die Dekodierung */
 (function (root, f) { if (typeof module === 'object' && module.exports) module.exports = f(); else root.PV = f(); })(this, function () {
   function rhythm() {
@@ -1984,13 +2124,32 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     return [xs[xs.length >> 1], xe[xe.length >> 1]];
   }
   // Ausschnitt je System wie im Original-Training: 4 Zwischenräume über/unter dem System, 2 seitlich
+  // Klavierstimme auswählen: bei Gesang + Klavier (3–4 verbundene Zeilen) nur die unteren zwei;
+  // einzelne Zeilen direkt über einem Klaviersystem (unverbundene Gesangszeile) werden übersprungen
+  function pianoStaves(found) {
+    var sys = found.systems || [], anyGrand = sys.some(function (s) { return s.staves.length >= 2; }), out = [];
+    sys.forEach(function (s, j) {
+      var st = s.staves;
+      if (st.length >= 3) { out.push({ staves: st.slice(-2), sp: s.sp, above: st[st.length - 3] }); return; }
+      if (st.length === 1 && anyGrand) {
+        var nx = sys[j + 1];
+        if (nx && nx.staves.length >= 2 && nx.top - s.bot < s.sp * 12) return; // Gesangszeile
+      }
+      out.push({ staves: st, sp: s.sp, above: null });
+    });
+    return out;
+  }
   function boxes(gray, w, h, found) {
-    var sys = found.systems || [];
+    var sys = pianoStaves(found);
     return sys.map(function (s, j) {
-      var sp = s.sp, ex = staffExtent(gray, w, h, s.staves[0]);
-      var above = j ? (sys[j - 1].bot + s.top) / 2 : 0, below = j < sys.length - 1 ? (s.bot + sys[j + 1].top) / 2 : h;
+      var sp = s.sp, top = s.staves[0].top, bot = s.staves[s.staves.length - 1].bot, ex = staffExtent(gray, w, h, s.staves[0]);
+      var prevBot = s.above ? s.above.bot : j ? sys[j - 1].staves[sys[j - 1].staves.length - 1].bot : -1e9;
+      var nextTop = j < sys.length - 1 ? sys[j + 1].staves[0].top : 1e9;
+      var above = prevBot > -1e8 ? (prevBot + top) / 2 : 0, below = nextTop < 1e8 ? (bot + nextTop) / 2 : h;
+      // Gesangszeilen über dem System liegen auch zwischen den Systemen: nicht mit hineinnehmen
+      (found.staves || []).forEach(function (o) { if (o.bot < top && o.bot > above - sp * 6) above = Math.max(above, (o.bot + top) / 2); });
       return { x0: Math.max(0, Math.floor(ex[0] - 2 * sp)), x1: Math.min(w, Math.ceil(ex[1] + 2 * sp)),
-        y0: Math.max(0, Math.floor(Math.max(above, s.top - 4 * sp))), y1: Math.min(h, Math.ceil(Math.min(below, s.bot + 4 * sp))), grand: s.staves.length === 2, sp: sp };
+        y0: Math.max(0, Math.floor(Math.max(above, top - 4 * sp))), y1: Math.min(h, Math.ceil(Math.min(below, bot + 4 * sp))), grand: s.staves.length === 2, sp: sp };
     });
   }
   // Graustufen-Ausschnitt → normierter Eingabetensor (bilinear skaliert, links oben bündig, vertikal mittig)
@@ -2500,7 +2659,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       var sp = (prev.sp + st.sp) / 2;
       var conn = conns[i - 1] || (!anyConn && gap < sp * 5);
       if (typeof process !== 'undefined' && process.env && process.env.FSDBG) console.log('pair', prev.top.toFixed(0), st.top.toFixed(0), 'gap/sp', (gap / sp).toFixed(1), 'conn', conn, lineStart(prev), lineStart(st));
-      if (cur.staves.length < 2 && gap < sp * 14 && conn) cur.staves.push(st);
+      if (cur.staves.length < 4 && gap < sp * 14 && conn) cur.staves.push(st); // Klavier (2) oder Gesang + Klavier (3–4)
       else { systems.push(cur); cur = { staves: [st] }; }
     }
     systems.push(cur);
@@ -2510,7 +2669,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       var above = j ? (systems[j - 1].bot + s.top) / 2 : Math.max(0, s.top - s.sp * 6);
       var below = j < systems.length - 1 ? (s.bot + systems[j + 1].top) / 2 : Math.min(h, s.bot + s.sp * 6);
       s.y0 = Math.max(0, Math.floor(Math.min(above, s.top - s.sp * 2))); s.y1 = Math.min(h, Math.ceil(Math.max(below, s.bot + s.sp * 2)));
-      s.grand = s.staves.length === 2;
+      s.grand = s.staves.length >= 2;
     });
     return { systems: systems, staves: staves, angle: best.ang, lines: lines, prof: prof, lim: lim };
   }
@@ -2917,7 +3076,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.0', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.1', VERSION_DATE = '31.10.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -3009,21 +3168,69 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   var micOn = false;
   var Snd = (function () {
     var ctx = null, master = null, wave = null, active = 0;
+    /* Echter Flügel: Salamander Grand Piano (Yamaha C5, Alexander Holm, CC-BY 3.0), Aufnahmen im Abstand kleiner Terzen */
+    var PIANO = { buf: {}, loading: false, n: 0 };
+    var PNAMES = ['A0', 'C1', 'Ds1', 'Fs1', 'A1', 'C2', 'Ds2', 'Fs2', 'A2', 'C3', 'Ds3', 'Fs3', 'A3', 'C4', 'Ds4', 'Fs4', 'A4', 'C5', 'Ds5', 'Fs5', 'A5', 'C6', 'Ds6', 'Fs6', 'A6', 'C7', 'Ds7', 'Fs7', 'A7', 'C8'];
+    function pmidi(n) { var m = /^([A-G])(s?)(\d)$/.exec(n); return (+m[3] + 1) * 12 + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] ? 1 : 0); }
+    function loadPiano() {
+      if (PIANO.loading || !ctx || !window.fetch) return; PIANO.loading = true;
+      var list = PNAMES.slice().sort(function (a, b) { return Math.abs(pmidi(a) - 62) - Math.abs(pmidi(b) - 62); }), i = 0;
+      function decode(ab) { return new Promise(function (res, rej) { try { var p = ctx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); } catch (e) { rej(e); } }); }
+      function next() {
+        if (i >= list.length) return;
+        var name = list[i++];
+        fetch('piano/' + name + '.mp3').then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(decode)
+          .then(function (b) { PIANO.buf[pmidi(name)] = b; PIANO.n++; }).catch(function () { /* dann klingt dieser Bereich synthetisch */ }).then(next);
+      }
+      next(); next(); next();
+    }
+    function sampleFor(midi) { var best = null, bd = 99; for (var k in PIANO.buf) { var d = Math.abs(midi - k); if (d < bd) { bd = d; best = +k; } } return bd <= 3 ? best : null; }
+    function makeIR(c) {
+      var len = Math.floor(c.sampleRate * 1.8), ir = c.createBuffer(2, len, c.sampleRate);
+      for (var ch = 0; ch < 2; ch++) { var d = ir.getChannelData(ch), lp = 0; for (var i = 0; i < len; i++) { var t = i / c.sampleRate; lp += ((Math.random() * 2 - 1) - lp) * (0.35 - 0.25 * Math.min(1, t)); d[i] = lp * Math.exp(-t / 0.42) * (t < 0.012 ? t / 0.012 : 1); } }
+      return ir;
+    }
     function init() {
       if (ctx) return ctx;
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
       var comp = ctx.createDynamicsCompressor(); master = ctx.createGain(); master.gain.value = S.vol;
+      comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.25;
       master.connect(comp); comp.connect(ctx.destination);
+      // etwas Raumklang wie in einem Wohnzimmer
+      try { var conv = ctx.createConvolver(), wet = ctx.createGain(); conv.buffer = makeIR(ctx); wet.gain.value = 0.2; master.connect(conv); conv.connect(wet); wet.connect(comp); } catch (e) { /* ohne Hall */ }
+      setTimeout(loadPiano, 50);
       var n = 24, re = new Float32Array(n), im = new Float32Array(n), amps = [0, 1, 0.62, 0.4, 0.27, 0.18, 0.12, 0.08, 0.06, 0.04, 0.03, 0.02];
       for (var i = 1; i < n; i++) im[i] = amps[i] || 0.012 / i;
       wave = ctx.createPeriodicWave(re, im);
       return ctx;
     }
     function resume() { if (!micOn) audioSession('playback'); var c = init(); if (c && c.state !== 'running') { try { c.resume(); } catch (e) { /* ignorieren */ } } return c; }
+    function sampleVoice(c, sm, midi, when, vel, dur, bus) {
+      var src = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(), rel = c.createGain();
+      src.buffer = PIANO.buf[sm]; src.playbackRate.value = Math.pow(2, (midi - sm) / 12) * (S.a4 / 440);
+      lp.type = 'lowpass'; lp.Q.value = 0.4; lp.frequency.value = Math.min(18000, 700 + 15000 * Math.pow(vel, 1.7) + (midi - 40) * 40);
+      g.gain.value = (0.1 + 0.9 * Math.pow(vel, 1.6)) * 1.15;
+      src.connect(lp); lp.connect(g); g.connect(rel); rel.connect(bus || master);
+      var tau = midi < 45 ? 0.2 : midi < 64 ? 0.13 : midi < 84 ? 0.09 : 0.06, finished = false;
+      active++;
+      function done() { if (finished) return; finished = true; active--; try { src.disconnect(); rel.disconnect(); } catch (e) { /* ignorieren */ } }
+      src.onended = done;
+      src.start(when, 0.012);
+      var maxEnd = when + src.buffer.duration / src.playbackRate.value;
+      if (dur != null) { var t1 = when + Math.max(0.05, dur); rel.gain.setValueAtTime(1, t1); rel.gain.setTargetAtTime(0, t1, tau); src.stop(Math.min(maxEnd, t1 + tau * 8)); }
+      return {
+        release: function () {
+          var t = c.currentTime;
+          rel.gain.cancelScheduledValues(t); rel.gain.setValueAtTime(rel.gain.value, t); rel.gain.setTargetAtTime(0, t, tau);
+          try { src.stop(t + tau * 8); } catch (e) { /* schon beendet */ }
+        }
+      };
+    }
     function voice(midi, when, vel, dur, bus) {
-      var c = init(); if (!c || active > 36) return null;
+      var c = init(); if (!c || active > 64) return null;
+      var sm = sampleFor(midi); if (sm != null) return sampleVoice(c, sm, midi, when, vel, dur, bus);
       var f = S.a4 * Math.pow(2, (midi - 69) / 12);
       var o1 = c.createOscillator(), o2 = c.createOscillator(), g2 = c.createGain(), lp = c.createBiquadFilter(), env = c.createGain(), rel = c.createGain();
       o1.setPeriodicWave(wave); o2.setPeriodicWave(wave); o1.frequency.value = f; o2.frequency.value = f; o2.detune.value = 5; g2.gain.value = 0.55;
@@ -3054,7 +3261,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       };
     }
     return {
-      resume: resume, ctx: function () { return init(); }, now: function () { var c = init(); return c ? c.currentTime : 0; },
+      resume: resume, ctx: function () { return init(); }, pianoReady: function () { return PIANO.n; }, load: function () { init(); }, now: function () { var c = init(); return c ? c.currentTime : 0; },
       setVol: function (v) { if (master) master.gain.value = v; },
       start: function (midi, vel) { var c = resume(); if (!c) return null; return voice(midi, c.currentTime, vel == null ? 0.8 : vel, null); },
       play: function (midi, when, dur, vel, bus) { return voice(midi, when, vel, dur, bus); },
@@ -3070,6 +3277,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     };
   })();
 
+  window.TastoSnd = Snd; // für Tests
   /* ================= Eingabe: Mikrofon & MIDI ================= */
   function Mic() { this.timer = null; this.stream = null; this.nodes = null; this.gen = 0; }
   Mic.prototype.open = function () {
@@ -3780,6 +3988,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       box.appendChild(el('div', { class: 'brand big' }, [logoEl(56), el('span', { text: 'Willkommen bei Tasto' })]));
       var steps = [
         ['camera', 'Noten einscannen', 'Fotografiere dein Notenblatt oder nimm einen Screenshot. Die Noten-KI liest es direkt auf dem iPhone, beide Hände, Takt für Takt – danach ist das Stück sofort spielbar.'],
+        ['mic', 'Lied aus Musik', 'Lass Tasto ein Lied anhören (oder wähle eine Bildschirmaufnahme vom Video) – daraus werden Noten für beide Hände.'],
         ['spark', 'Drei Schwierigkeitsgrade', 'Aus jedem Stück macht Tasto eine leichte Version (Melodie und Basston), eine mittlere und das Original.'],
         ['falls', 'Wasserfall', 'Die Noten fallen auf die Tasten zu. Die Klaviatur füllt die ganze Breite, alle Funktionen klappst du oben über den Titel auf.'],
         ['mic', 'Echtes Klavier', 'Öffnest du ein Stück, hört Tasto automatisch zu. Eine Hör-KI erkennt jeden Anschlag – auch die richtige Oktave – und geht im Modus „Üben“ erst weiter, wenn du die richtigen Töne triffst.'],
@@ -3801,10 +4010,23 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       return chain.then(function () { try { localStorage.setItem('ks-seeded', '1'); } catch (e) { /* ignorieren */ } });
     });
   }
-  function newPiece() { showEditor({ id: uid(), title: '', abc: '', scans: [], created: Date.now(), pct: 100, hands: 'RL', isNew: true }); }
+  function newPiece() {
+    function blank() { return { id: uid(), title: '', abc: '', scans: [], created: Date.now(), pct: 100, hands: 'RL', isNew: true }; }
+    overlay(function (box, close) {
+      box.classList.add('newbox');
+      box.appendChild(el('h2', { text: 'Neues Stück' }));
+      box.appendChild(el('p', { class: 'hint', text: 'Woher kommen die Noten?' }));
+      function opt(ic, t, sub, act) { return el('button', { class: 'menu-item', onclick: function () { close(); showEditor(blank(), act); } }, [icon(ic), el('div', {}, [el('b', { text: t }), el('span', { text: sub })])]); }
+      box.appendChild(opt('camera', 'Notenblatt fotografieren', 'Die Noten-KI liest beide Hände – auch mit Gesangszeile darüber', 'camera'));
+      box.appendChild(opt('image', 'Screenshot, Bild oder PDF', 'Aus der Fotos-App oder aus Dateien', 'file'));
+      if (kiPossible()) box.appendChild(opt('mic', 'Lied aus Musik', 'Tasto hört ein Lied an oder liest eine Audio-/Videodatei', 'music'));
+      box.appendChild(opt('edit', 'Selbst eingeben', 'Noten als Text schreiben (ABC)', 'text'));
+      box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn', text: 'Abbrechen', onclick: close })]));
+    });
+  }
 
   /* ================= Ansicht: Bearbeiten ================= */
-  function showEditor(piece) {
+  function showEditor(piece, startAction) {
     go(function () {
       var scans = (piece.scans || []).slice(), saved = false, ctl = null, prevLevel = 'orig';
       var view = el('div', { class: 'view' });
@@ -4033,6 +4255,83 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         manualRow, busy, stream
       ]);
       scrollBox.appendChild(aiCard);
+      /* --- Lied aus Musik: zuhören oder Audio-/Videodatei --- */
+      var mBusy = el('div', { class: 'row', hidden: true }), mCtl = null, rec = null;
+      function mProgress(m, f) {
+        clear(mBusy); mBusy.hidden = false;
+        var bar = el('div', { class: 'pbar' }, [el('i')]); bar.firstChild.style.width = Math.round(clamp(f, 0, 1) * 100) + '%';
+        mBusy.appendChild(el('div', { class: 'pwrap' }, [el('span', { class: 'pmsg', text: m }), bar]));
+        mBusy.appendChild(el('button', { class: 'btn sm', text: 'Abbrechen', onclick: function () { if (mCtl) mCtl.abort(); if (rec) rec.cancel(); } }));
+      }
+      function fromAudio(pcm, rate, name) {
+        mCtl = new AbortController(); var signal = mCtl.signal, t0 = perf();
+        mProgress('Hör-KI wird geladen …', 0.02);
+        loadHearKI().then(function (k) {
+          var p22 = PX.to22(pcm, rate);
+          return PX.analyze(k.ort, k.sess, p22, function (f) { mProgress('Tasto hört sich das Stück an … ' + Math.round(f * 100) + ' %', 0.05 + f * 0.9); }, signal);
+        }).then(function (res) {
+          var ns = PX.notes(res), r = PX.toAbc(ns, res.T, { title: title.value.trim() || name || 'Aus Musik' });
+          if (!r || r.notes < 4) { toast('Darin waren kaum Klaviertöne zu hören. Am besten klappt es mit reinem Klavier, gut hörbar, ohne Gesang.', 6000); return; }
+          if (!title.value.trim() && name) title.value = name;
+          abcBox.value = r.abc; refresh();
+          toast('Fertig: ' + r.notes + ' Noten in ' + r.bars + ' Takten, Tempo ' + r.bpm + '. Speichern – dann kannst du es üben (auch „Leicht“).', 6500);
+          if (window.__tastoPx) window.__tastoPx({ secs: perf() - t0, abc: r.abc });
+        }).catch(function (e) { toast(e && e.name === 'AbortError' ? 'Abgebrochen.' : 'Das hat nicht geklappt (' + ((e && e.message) || 'Fehler') + ').', 5000); })
+          .then(function () { mBusy.hidden = true; clear(mBusy); mCtl = null; });
+      }
+      function pickAudio() {
+        var inp = el('input', { type: 'file', accept: 'audio/*,video/*', style: 'display:none' });
+        inp.addEventListener('change', function () {
+          var f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
+          if (f.size > 300e6) { toast('Die Datei ist sehr groß. Schneide das Video auf das Lied zu (max. ca. 6 Minuten).', 5000); return; }
+          mProgress('Datei wird geöffnet …', 0.01);
+          var c = Snd.resume();
+          f.arrayBuffer().then(function (ab) { return new Promise(function (res, rej) { try { var pr = c.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); } catch (e) { rej(e); } }); })
+            .then(function (b) {
+              var n = Math.min(b.length, Math.floor(b.sampleRate * 360)), mono = new Float32Array(n);
+              for (var ch = 0; ch < b.numberOfChannels; ch++) { var d = b.getChannelData(ch); for (var i = 0; i < n; i++) mono[i] += d[i] / b.numberOfChannels; }
+              fromAudio(mono, b.sampleRate, f.name.replace(/\.[^.]+$/, ''));
+            }).catch(function () { mBusy.hidden = true; toast('Diese Datei kann Tasto nicht lesen. Versuch eine Bildschirmaufnahme oder eine MP3/M4A-Datei.', 5000); });
+        });
+        document.body.appendChild(inp); inp.click();
+      }
+      function listen() {
+        if (rec) return rec.stop();
+        var m = new Mic(), chunks = [], total = 0, t0 = perf(), rate = 48000, sp = null, timer = null, cancelled = false;
+        rec = {
+          stop: function () { finish(); },
+          cancel: function () { cancelled = true; finish(); }
+        };
+        function finish() {
+          clearInterval(timer); try { if (sp) { sp.disconnect(); sp.onaudioprocess = null; } } catch (e) { /* ignorieren */ } m.stop(); rec = null;
+          listenBtn.lastChild.textContent = 'Zuhören starten';
+          if (cancelled) { mBusy.hidden = true; return; }
+          if (total < rate * 3) { mBusy.hidden = true; toast('Zu kurz – lass das Lied mindestens ein paar Sekunden laufen.'); return; }
+          var pcm = new Float32Array(total), o = 0; chunks.forEach(function (c) { pcm.set(c, o); o += c.length; });
+          fromAudio(pcm, rate, '');
+        }
+        m.open().then(function (io) {
+          var c = Snd.ctx(); rate = c.sampleRate;
+          sp = c.createScriptProcessor(4096, 1, 1); var mute = c.createGain(); mute.gain.value = 0;
+          sp.onaudioprocess = function (e) { if (total < rate * 360) { var x = new Float32Array(e.inputBuffer.getChannelData(0)); chunks.push(x); total += x.length; if (window.__recDbg) { var mx = 0; for (var i = 0; i < x.length; i++) mx = Math.max(mx, Math.abs(x[i])); window.__recDbg.max = Math.max(window.__recDbg.max || 0, mx); window.__recDbg.total = total; window.__recDbg.state = c.state; } } };
+          m.nodes[0].connect(sp); sp.connect(mute); mute.connect(c.destination);
+          listenBtn.lastChild.textContent = 'Fertig – umwandeln';
+          timer = setInterval(function () {
+            var sec = Math.round(perf() - t0), lv = io.rms(1024); io.fresh();
+            mProgress('Tasto hört zu … ' + Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2) + (lv < -60 ? ' (sehr leise – lauter stellen)' : ''), Math.min(1, sec / 360));
+            if (sec >= 360) finish();
+          }, 250);
+        }).catch(function (e) { rec = null; micHelp(e, listen); });
+      }
+      var listenBtn = el('button', { class: 'btn', onclick: function () { listen(); } }, [icon('mic'), el('span', { text: 'Zuhören starten' })]);
+      var musicCard = el('div', { class: 'card ai' }, [
+        el('div', { class: 'row' }, [el('h2', { style: 'flex:1', text: 'Lied aus Musik erzeugen' }), el('span', { class: 'chip', text: 'Hör-KI' })]),
+        el('p', { text: 'Tasto hört sich ein Lied an und schreibt daraus Noten für beide Hände – danach kannst du es üben, auch in „Leicht“. Am besten klappt reines Klavier, z. B. Klavier-Tutorials.' }),
+        el('div', { class: 'row' }, [listenBtn, el('button', { class: 'btn', onclick: pickAudio }, [icon('upload'), 'Audio- oder Videodatei'])]),
+        el('details', {}, [el('summary', { text: 'Lied von YouTube?' }), el('p', { class: 'hint', text: 'Einen YouTube-Link kann Tasto nicht direkt öffnen – YouTube erlaubt kein Herunterladen. So geht es trotzdem: 1) Spiel das Video auf einem anderen Gerät oder Lautsprecher ab und tippe hier auf „Zuhören starten“. Oder 2) Starte auf dem iPhone die Bildschirmaufnahme (Kontrollzentrum), spiel das Video ab, beende die Aufnahme und wähle sie hier unter „Audio- oder Videodatei“ aus.' })]),
+        mBusy
+      ]);
+      if (kiPossible()) scrollBox.appendChild(musicCard);
       var help = el('details', {}, [el('summary', { text: 'So schreibst du Noten (Kurzhilfe)' }), el('pre', { text:
         'X:1\nT:Mein Stück\nM:4/4        Taktart\nL:1/4        Grundlänge = Viertel\nQ:1/4=90     Tempo\nK:G          Tonart\nV:R clef=treble   rechte Hand\nG A B c | d2 d2 | [GBd]4 |]\nV:L clef=bass     linke Hand\n[G,,D,]4 | G,,2 D,2 | [G,,D,G,]4 |]\n\nC D E F G A B = c´ eingestrichene Oktave\nc d e ... = eine Oktave höher, c\' noch höher\nC, D, ... = eine Oktave tiefer\n^F = Fis   _B = B   =F = Auflösung\nC2 = doppelt so lang   C/ = halb so lang\nz = Pause   [CEG] = Akkord   C- C = Haltebogen' })]);
       scrollBox.appendChild(el('div', { class: 'card' }, [el('h2', { text: 'Notentext' }),
@@ -4051,8 +4350,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         autoBtn.hidden = !(auto || local); manualRow.hidden = auto || local; verify.parentNode.hidden = !auto || local; claudeBtn.hidden = !(local && auto);
         aiText.textContent = local ? 'Die Noten-KI läuft direkt auf deinem Gerät – ohne Konto und ohne Claude. Sie findet die Notensysteme auf Fotos, Screenshots und PDFs und liest beide Hände Takt für Takt. Beim ersten Mal lädt sie einmalig ca. 100 MB (WLAN empfohlen), danach geht es offline.' : auto ? 'Tasto findet die Notenzeilen auf deinen Seiten, lässt Claude jede Zeile Takt für Takt lesen und prüft, ob alle Takte aufgehen. Fehlerhafte Zeilen korrigiert Claude automatisch.' : 'Tippe unter einer Seite auf das Funkeln. Für die automatische Erkennung in mehreren Schritten trag in den Einstellungen einen API-Schlüssel ein.';
       }, 400);
-      cleanup = function () { clearInterval(aiTimer); if (ctl) ctl.abort(); };
-      if (piece.isNew) setTimeout(function () { title.focus(); }, 50);
+      cleanup = function () { clearInterval(aiTimer); if (ctl) ctl.abort(); if (mCtl) mCtl.abort(); if (rec) rec.cancel(); };
+      if (startAction === 'camera') pick(true);
+      else if (startAction === 'file') pick(false);
+      else if (startAction === 'music') setTimeout(function () { musicCard.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
+      else if (startAction === 'text') setTimeout(function () { abcBox.focus(); }, 80);
+      else if (piece.isNew) setTimeout(function () { title.focus(); }, 50);
     });
   }
 
