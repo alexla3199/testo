@@ -290,6 +290,26 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .cal-row.ok b { color: var(--ok); } .cal-row.bad b { color: var(--bad); }
 .cal-row span { color: var(--muted); text-align: right; }
 
+/* 5.0: Klavier einstellen, „Tasto hört“, Tonwiederholung */
+.setup-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px 16px 16px 14px; border-radius: 20px; border: 1.5px solid color-mix(in srgb, var(--brand) 55%, transparent); background: color-mix(in srgb, var(--brand) 12%, var(--surface)); color: var(--ink); box-shadow: var(--shadow); }
+.setup-card > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.setup-card b { font: 600 19px/1.2 var(--f-title); }
+.setup-card span { font-size: 13.5px; color: var(--muted); }
+.setup-card .setup-ic { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); flex: none; box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 20%, transparent); }
+.setup-card > svg { color: var(--muted); }
+.setup-ok { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+.setup-ok svg { color: var(--ok); width: 18px; height: 18px; }
+.setup-ok span { flex: 1; min-width: 0; }
+.setup-box { text-align: center; }
+.setup-box .acts { justify-content: center; }
+.setup-hero { display: grid; place-items: center; width: 74px; height: 74px; margin: 4px auto 6px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); box-shadow: 0 0 0 10px color-mix(in srgb, var(--brand) 18%, transparent); }
+.setup-hero svg { width: 34px; height: 34px; }
+.st-heard { position: absolute; z-index: 2; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 99px; background: rgba(9, 14, 26, .7); border: 1px solid rgba(255, 255, 255, .08); color: #8f9bb1; font: 600 13px/1.2 var(--f-ui); pointer-events: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: color .15s, border-color .15s; }
+.st-heard svg { width: 14px; height: 14px; }
+.st-heard.on { color: #3ddc97; border-color: rgba(61, 220, 151, .35); }
+.st-heard span { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.st-pill small.again { align-self: center; margin-left: 6px; padding: 2px 8px; border-radius: 99px; background: rgba(255, 181, 71, .16); color: #ffc56b; font: 700 11px/1.3 var(--f-ui); letter-spacing: .05em; text-transform: uppercase; }
+
 </style>
 <div id="app"></div>
 <script>
@@ -1417,6 +1437,19 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       }
       return e > 0 ? 10 * Math.log10(e) : -200;
     }
+    // Anschlag hebt alle Teiltöne gleichzeitig; Schwebung/Nachschwellen nur einzelne -> Anzahl Teiltöne mit Sprung >= 3 dB in ~90 ms
+    function harmJump(m, now, S) {
+      var old = null; for (var i = specRing.length - 1; i >= 0; i--) if (specRing[i].t <= now - 0.075) { old = specRing[i].S; break; }
+      if (!old) return { n: 0, of: 0 };
+      var bs = tbins(m, binS, nbS), n = 0, of = 0;
+      for (var q = 0; q < bs.length && q < 6; q++) {
+        var b = bs[q], a = -300, c = -300;
+        for (var k = b.lo; k <= b.hi; k++) { if (S[k] > a) a = S[k]; if (old[k] > c) c = old[k]; }
+        if (a < P.gateDb + 10) continue;
+        of++; if (a - c >= 3) n++;
+      }
+      return { n: n, of: of };
+    }
     function peakAt(db, m, h) {
       var b = tbins(m, binS, nbS)[h - 1]; if (!b) return -300;
       var pk = -300, km = -1;
@@ -1440,10 +1473,22 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       return { s: s0, p1: p1 };
     }
 
-    var prevS = null, fluxHist = [], lastOnset = -9, onsetT = -9, pre = null;
+    var specRing = [], prevS = null, fluxHist = [], lastOnset = -9, onsetT = -9, pre = null;
     var hist = {}; // midi -> [{t,e}]
     var lastHitT = -9, lastHitE = -200, freshUntil = {}, lastEmit = {}, cnt = {}, wrongDone = {}, ringSeen = {}, ringSet = {}, since = {}, peakAfter = {}, armed = {}, onsetTargets = [];
     var lastLarge = -9, resL = null, level = -100, dbg = opt.debug || null, lastSal = {};
+    // Lernen: pro Ton typische Stärke beim Anschlag (aus Einmessen, Anlernen und Spielen)
+    var learned = {}, track = {}, nmTrack = {}, nmList = {}, stepT = -99, prevStepT = -99, stepTg = {}, prevTg = {};
+    if (opt.learned) Object.keys(opt.learned).forEach(function (m) { var x = opt.learned[m]; if (x && x.n) learned[m] = { sal: +x.sal || 0, rise: +x.rise || 0, n: +x.n || 0 }; });
+    function learn(m, sal, rise, w) {
+      var L0 = learned[m] || { sal: sal, rise: rise, n: 0 }, a = Math.min(0.5, (w || 1) / (L0.n + 2));
+      L0.sal = L0.sal + (sal - L0.sal) * a; L0.rise = L0.rise + (rise - L0.rise) * a; L0.n = Math.min(50, L0.n + (w || 1));
+      learned[m] = L0;
+    }
+    // gelernter Wert für m, sonst vom nächsten gelernten Nachbarton (±2 Halbtöne) – Mikrofon/Klavier ändern sich nur langsam über die Tonhöhe
+    function lrn(m) { var L0 = learned[m]; if (L0 && L0.n >= 2) return L0; for (var d = 1; d <= 2; d++) { var a = learned[m - d], b = learned[m + d]; if (a && a.n >= 2) return a; if (b && b.n >= 2) return b; } return L0; }
+    function accOf(m) { var L0 = lrn(m); return L0 && L0.n >= 2 ? Math.max(0.2, Math.min(P.accept, L0.sal * 0.6)) : P.accept; }
+    function riseThrOf(m) { var L0 = lrn(m); return L0 && L0.n >= 2 ? Math.max(3, Math.min(P.riseDb, L0.rise * 0.55)) : P.riseDb; }
 
     function pushHist(m, t, e) {
       var h = hist[m] || (hist[m] = []);
@@ -1452,10 +1497,37 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     }
     function riseOf(m, now) {
       var h = hist[m]; if (!h || !h.length) return 0;
-      var cur = h[h.length - 1].e, from = Math.max(now - 0.4, (lastEmit[m] || -9) + 0.2, (since[m] || -9) + (P.sinceGap || 0)), mn = 1e9;
+      var cur = h[h.length - 1].e, from = Math.max(now - 0.4, (lastEmit[m] || -9) + 0.2, (since[m] || -9) + (P.sinceGap || 0), lastEmit[m] != null && lastEmit[m] >= prevStepT - 0.05 ? stepT : -9), mn = 1e9;
       for (var i = 0; i < h.length - 1; i++) if (h[i].t >= from && h[i].t <= now - 0.025 && h[i].e < mn) mn = h[i].e;
       if (mn > 1e8) return 0;
       return cur - mn;
+    }
+    // teilt t tiefe Teiltöne mit r? (dann kann ein noch anschwellender Ton r auch t „steigen“ lassen)
+    function shares(t, r, ni, nj) {
+      if (t === r) return true;
+      var ft = Math.pow(2, (t - 69) / 12), fr = Math.pow(2, (r - 69) / 12);
+      for (var i = 1; i <= (ni || 4); i++) for (var j = 1; j <= (nj || 6); j++) if (Math.abs(ft * i - fr * j) / (ft * i) < 0.03) return true;
+      return false;
+    }
+    // Ton aus dem vorigen Schritt, der noch nachklingt/anschwillt und t überlagert
+    function carried(t, now, targets) {
+      for (var k in lastEmit) {
+        var r = +k, le = lastEmit[k];
+        // r aus dem vorigen Schritt klingt noch (kurz danach) oder wird für eine Tonwiederholung gehalten (r ist wieder Ziel)
+        if (le >= prevStepT - 0.05 && le < stepT + 0.02 && (r === t || now - le < (P.carrT || 0.7) || (targets && targets.indexOf(r) >= 0)) && shares(t, r)) return true;
+      }
+      return false;
+    }
+    function peakSince(m) { var h = hist[m], pk = -1e9; if (!h) return pk; var t0 = (lastEmit[m] == null ? -9 : lastEmit[m]) - 0.1; for (var i = 0; i < h.length; i++) if (h[i].t >= t0 && h[i].e > pk) pk = h[i].e; return pk; }
+    // Tonwiederholung bei gehaltener Taste: erst muss der Ton nach seinem Höhepunkt abfallen, dann neu ansteigen
+    function reRise(m, now) {
+      var h = hist[m]; if (!h || h.length < 4) return 0;
+      var t0 = (lastEmit[m] == null ? -9 : lastEmit[m]) - 0.1, pk = -1e9, pi = -1;
+      for (var i = 0; i < h.length - 1; i++) if (h[i].t >= t0 && h[i].e > pk) { pk = h[i].e; pi = i; }
+      if (pi < 0) return 0;
+      var mn = 1e9; for (var j = pi + 1; j < h.length - 1; j++) if (h[j].t <= now - 0.025 && h[j].e < mn) mn = h[j].e;
+      if (mn > 1e8 || pk - mn < 1.5) return 0;
+      return h[h.length - 1].e - mn;
     }
     // kurzer Anschlag (z. B. Tonwiederholung): Sprung in den letzten ~60 ms nach ruhigem Verlauf
     function eAt(h, t) { var best = null; for (var i = h.length - 1; i >= 0; i--) { if (h[i].t <= t) { best = h[i].e; break; } } return best; }
@@ -1478,6 +1550,20 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       return false;
     }
     var lastS = null, lastPicks = null;
+    // ein neu angeschlagener Nicht-Ziel-Ton (dann könnte t nur ein Teilton/Nebengeräusch sein)
+    function strongOtherNT(t, targets) {
+      if (!pre || !lastS) return false;
+      var ps = lastPicks || [];
+      for (var i = 0; i < ps.length; i++) { var m = ps[i].midi; if (m === t || targets.indexOf(m) >= 0 || ps[i].sal < 0.5 || targets.some(function (r) { return r !== t && shares(m, r, 2, 8); })) continue; if (energy(lastS, m) - energy(pre, m) >= 6) return true; }
+      return false;
+    }
+    // ein anderer, deutlich neu angeschlagener Ton (auch Oktave/Quinte)?
+    function strongOther(t) {
+      if (!pre || !lastS) return false;
+      var ps = lastPicks || [];
+      for (var i = 0; i < ps.length; i++) { var m = ps[i].midi; if (m === t || ps[i].sal < 0.6) continue; if (energy(lastS, m) - energy(pre, m) >= 4) return true; }
+      return false;
+    }
     function median(a) { var b = a.slice().sort(function (x, y) { return x - y; }); return b[b.length >> 1] || 0; }
 
     function tick(now, io, getTargets) {
@@ -1503,10 +1589,11 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         ringSet = {}; Object.keys(ringSeen).forEach(function (m) { if (now - ringSeen[m] < 1.0) ringSet[m] = 1; });
       }
       prevS = new Float32Array(S);
+      specRing.push({ t: now, S: prevS }); while (specRing.length && specRing[0].t < now - 0.3) specRing.shift();
 
       var targets = getTargets(now) || [];
       Object.keys(since).forEach(function (m) { if (targets.indexOf(+m) < 0) delete since[m]; });
-      targets.forEach(function (t) { if (since[t] == null) since[t] = now; });
+      targets.forEach(function (t) { if (since[t] == null) since[t] = now; if (now - stepT < 0.5) stepTg[t] = 1; });
       // Nachbarn der Ziele mitverfolgen (für den Anschlags-Vergleich)
       var tracked = {};
       targets.forEach(function (t) { [-2, -1, 1, 2, -12, -19, -24].forEach(function (d) { var u = t + d; if (u >= 21 && targets.indexOf(u) < 0 && !tracked[u]) { tracked[u] = 1; pushHist(u, now, energy(S, u)); } }); });
@@ -1531,6 +1618,12 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         return r.s;
       }
 
+      // nach einem Treffer: Spitzenwerte sammeln und daraus lernen
+      Object.keys(track).forEach(function (m) {
+        var tr = track[m]; m = +m;
+        tr.sal = Math.max(tr.sal, Math.max(salOf(m), tsOf(m))); var rr = riseOf(m, now); if (rr > tr.rise) tr.rise = rr;
+        if (now >= tr.until) { if (tr.sal >= 0.3) learn(m, tr.sal, tr.rise, 1); delete track[m]; }
+      });
       // Zieltöne
       var recent = []; Object.keys(lastEmit).forEach(function (m) { if (now - lastEmit[m] < 1.5) recent.push(+m); });
       targets.forEach(function (t) {
@@ -1578,20 +1671,63 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         if (!attOk && lastEmit[t] != null && armed[t] && now - lastOnset < 0.16 && lastOnset > lastEmit[t] + 0.12 && sal >= P.accept + 0.1) {
           repeatPath = att >= P.repFlux && !otherFresh(t);
         }
-        var fresh0 = rise >= P.riseDb || onsetPath || attOk || repeatPath;
+        var acc = accOf(t), rthr = riseThrOf(t);
+        // Tonwiederholung: dieser Ton wurde eben schon gespielt -> nur ein echter neuer Anschlag nach Schrittbeginn zählt
+        // auch wenn der Ton im vorigen Schritt Ziel war, aber (z. B. im Akkord) ohne eigene Meldung abgehakt wurde
+        var repeatCtx = (lastEmit[t] != null && lastEmit[t] >= prevStepT - 0.05 && lastEmit[t] < stepT + 0.02) || (prevTg[t] && !(lastEmit[t] >= stepT + 0.02));
+        var fresh0;
+        var rr = repeatCtx ? reRise(t, now) : 0, carr = !repeatCtx && !P.noCarr && carried(t, now, targets);
+        // gleicher Ton nochmal: nur ein echter neuer Anschlag (Einschwing-Ereignis nach Schrittbeginn) zählt, gehaltene Taste nicht
+        var newStrike = lastOnset > stepT + 0.02 && lastOnset > (lastEmit[t] || -9) + 0.1 && now - lastOnset < 0.35;
+        if (repeatCtx && opt.trace) { var hjT = harmJump(t, now, S); opt.trace({ t: t, now: now, att: att, rr: rr, rise: rise, on: lastOnset, sal: sal, stepT: stepT, e: e, pk: peakSince(t), le: lastEmit[t], hj: hjT.n + '/' + hjT.of, fu: freshUntil[t] || 0 }); }
+        if (repeatCtx) {
+          fresh0 = newStrike && (att >= (P.repA0 || 3.5) || rr >= Math.max(rthr, P.riseDb) + (P.rrPlus || 0));
+          if (fresh0) { var hj0 = harmJump(t, now, S); if (hj0.of > 0 && hj0.n < Math.min(P.repH0 || 1, hj0.of)) fresh0 = false; }
+          // leiser Anschlag ohne erkennbares Einschwingen (Pedal, leises Klavier): kräftiger Sprung fast auf die alte Spitze
+          if (!fresh0 && att >= (P.repA || 6)) { var hj = harmJump(t, now, S); fresh0 = hj.of > 0 && hj.n >= Math.min(P.repH || 2, hj.of); }
+        }
+        else if (carr) fresh0 = attOk || (onsetPath && lastOnset > stepT + 0.03) || (rise >= rthr && lastOnset > stepT + 0.03 && now - lastOnset < 0.5);
+        else fresh0 = rise >= rthr || onsetPath || attOk || repeatPath;
         // Anschlag merken: tiefe Töne werden im langen Fenster erst etwas später eindeutig
         if (fresh0 && ready) freshUntil[t] = Math.max(freshUntil[t] || 0, now + (t < SPLIT ? 0.55 : 0.3));
         var fresh = fresh0 || now <= (freshUntil[t] || 0);
         if (dbg) dbg(t, sal, rise, onsetPath, ready, now, e, att, attOk);
-        var ok = ready && loud && sal >= P.accept && fresh && now - (lastEmit[t] || -9) > 0.15;
-        if (ok && targets.length > 1 && sal < P.accept + 0.05) ok = rise >= P.riseDb + 1;
+        // Beinahe-Treffer merken (zum Dazulernen schwacher Töne)
+        if (ready && (repeatCtx ? fresh0 : carr && !P.nmOld ? (fresh0 || att >= 2.5) : (fresh0 || att >= 2.5 || rise >= 4)) && !nmTrack[t] && now - stepT > 0.02) nmTrack[t] = { t0: now, sal: sal, rise: Math.max(rise, att) };
+        if (nmTrack[t]) {
+          var nt = nmTrack[t]; nt.sal = Math.max(nt.sal, sal); nt.rise = Math.max(nt.rise, rise, att);
+          if (now - nt.t0 > 0.35) {
+            delete nmTrack[t];
+            if (nt.sal >= 0.14 && nt.sal < acc && !otherFresh(t) && !strongOther(t) && (lastEmit[t] == null || lastEmit[t] < nt.t0)) {
+              var lst = (nmList[t] || []).filter(function (x) { return now - x.t < 8 && x.t >= stepT - 0.05; });
+              lst.push({ t: nt.t0, sal: nt.sal, rise: nt.rise }); nmList[t] = lst;
+              if (lst.length >= 2) {
+                var ms = lst.reduce(function (a, x) { return a + x.sal; }, 0) / lst.length, mr = lst.reduce(function (a, x) { return a + x.rise; }, 0) / lst.length;
+                learn(t, ms, mr, 3); nmList[t] = [];
+                lastEmit[t] = now; cnt[t] = 0; armed[t] = false; peakAfter[t] = e; freshUntil[t] = 0;
+                out.push({ midi: t, t: nt.t0, kind: 'hit', learned: true, why: 'gelernt sal' + ms.toFixed(2) });
+                return;
+              }
+            }
+          }
+        }
+        var ok = ready && loud && sal >= acc && fresh && now - (lastEmit[t] || -9) > 0.15;
+        // leiser Ton im Akkord: klarer eigener Anschlag (großer Anstieg) und keine gemeinsamen Teiltöne mit anderen klingenden Tönen
+        if (!ok && ready && !carr && sal >= (P.weakSal || 0.18) && (repeatCtx ? fresh0 && Math.max(rr, att) >= (P.weakRise || 12) : rise >= (P.weakRise || 12) && (attOk || onsetPath) && now - lastOnset < 0.5) && now - (lastEmit[t] || -9) > 0.15) {
+          var iso = true;
+          for (var w = 0; w < targets.length && iso; w++) if (targets[w] !== t && shares(t, targets[w], 3, 4)) iso = false;
+          for (var k2 in lastEmit) if (iso && +k2 !== t && now - lastEmit[k2] < 1.5 && shares(t, +k2, 3, 4)) iso = false;
+          if (iso && !strongOtherNT(t, targets)) { ok = true; if (fresh0) freshUntil[t] = Math.max(freshUntil[t] || 0, now + 0.3); }
+        }
+        if (ok && targets.length > 1 && sal < acc + 0.05) ok = rise >= rthr + 1;
         if (ok) {
           cnt[t] = (cnt[t] || 0) + 1;
           if (cnt[t] >= 2 || (sal >= P.acceptHi && rise >= P.riseDb + 3)) {
             lastEmit[t] = now; cnt[t] = 0; armed[t] = false; peakAfter[t] = e; freshUntil[t] = 0;
+            track[t] = { until: now + 0.3, sal: sal, rise: rise }; delete nmTrack[t]; nmList[t] = [];
             if (now - lastHitT > 0.4) lastHitE = -200;
             lastHitT = now; lastHitE = Math.max(lastHitE, e);
-            out.push({ midi: t, t: now - lastOnset < 0.4 ? onsetT : now - 0.06, kind: 'hit', why: (rise >= P.riseDb ? 'rise' : onsetPath ? 'onset' : attOk ? 'att' : repeatPath ? 'repeat' : 'latch') + ' sal' + sal.toFixed(2) });
+            out.push({ midi: t, t: now - lastOnset < 0.4 ? onsetT : now - 0.06, kind: 'hit', why: (rise >= P.riseDb ? 'rise' : onsetPath ? 'onset' : attOk ? 'att' : repeatPath ? 'repeat' : 'latch') + ' sal' + sal.toFixed(2) + ' rc' + (repeatCtx ? 1 : 0) + ' ca' + (carr ? 1 : 0) + ' rr' + rr.toFixed(1) + ' r' + rise.toFixed(1) + ' a' + att.toFixed(1) + ' pk' + (e - peakSince(t)).toFixed(1) + ' le' + (lastEmit[t] != null ? (lastEmit[t]).toFixed(2) : '-') + ' st' + stepT.toFixed(2) + '/' + prevStepT.toFixed(2) + ' n' + now.toFixed(2) });
           }
         } else cnt[t] = 0;
       });
@@ -1622,6 +1758,10 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     return {
       tick: tick, setSens: setSens, small: SMALL, large: LARGE,
       level: function () { return level; },
+      step: function (now) { prevStepT = stepT; stepT = now; prevTg = stepTg; stepTg = {}; freshUntil = {}; cnt = {}; nmTrack = {}; nmList = {}; },
+      learnState: function () { var o = {}; Object.keys(learned).forEach(function (m) { var x = learned[m]; o[m] = { sal: +x.sal.toFixed(3), rise: +x.rise.toFixed(2), n: x.n }; }); return o; },
+      teach: function (m, sal, rise, w) { learn(m, sal, rise, w || 3); },
+      heard: function () { return (lastPicks || []).filter(function (p) { return p.sal >= 0.5; }).map(function (p) { return p.midi; }); },
       presence: function (m, now) { var x = lastSal[m]; return x && now - x.t < 0.3 ? x.v : 0; },
       reset: function () { prevS = null; fluxHist = []; hist = {}; lastEmit = {}; cnt = {}; ringSeen = {}; resL = null; },
       // Live-Ansicht (Mikrofon-Test): alle erkannten Töne
@@ -2250,7 +2390,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     more: 'M5 12h.01M12 12h.01M19 12h.01', flame: 'M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.3-4.8.2 1.6.9 2.6 1.9 3.1C11 8.6 11.3 5.6 12 3z',
     falls: 'M7 3v8M12 3v12M17 3v6M4 21h16M4 17h16', chevd: 'M6 9l6 6 6-6', chevu: 'M6 15l6-6 6 6', share: 'M12 15V3M8 7l4-4 4 4M5 13v7h14v-7',
     download: 'M12 3v12M8 11l4 4 4-4M5 21h14', upload: 'M12 15V3M8 7l4-4 4 4M5 21h14', target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    clip: 'M9 4h6v3H9zM7 5H5v16h14V5h-2', info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5v.01'
+    clip: 'M9 4h6v3H9zM7 5H5v16h14V5h-2', chevr: 'M9 6l6 6-6 6', check: 'M5 12.5l4.5 4.5L19 7', info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5v.01'
   };
   function icon(name, filled) {
     var s = el('span', { style: 'display:inline-flex' });
@@ -2291,7 +2431,13 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '4.5', VERSION_DATE = '31.10.2026';
+  var VERSION = '5.0', VERSION_DATE = '31.10.2026';
+  /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
+  var Learn = {};
+  try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
+  function saveLearn() { try { localStorage.setItem('ks-learn', JSON.stringify(Learn)); } catch (e) { /* ignorieren */ } }
+  function mergeLearn(o) { if (!o) return; Object.keys(o).forEach(function (m) { if (o[m] && o[m].n) Learn[m] = o[m]; }); saveLearn(); }
+  function learnedCount() { return Object.keys(Learn).filter(function (m) { return Learn[m] && Learn[m].n >= 2; }).length; }
   /* ================= Umgebung ================= */
   var ENV = {
     artifact: !!(window.claude && window.claude.use),
@@ -2439,15 +2585,16 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   })();
 
   /* ================= Eingabe: Mikrofon & MIDI ================= */
-  function Mic() { this.timer = null; this.stream = null; this.nodes = null; }
+  function Mic() { this.timer = null; this.stream = null; this.nodes = null; this.gen = 0; }
   Mic.prototype.open = function () {
-    var self = this;
+    var self = this, gen = this.gen;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { var ue = new Error('unsupported'); ue.name = 'NoMediaDevices'; return Promise.reject(ue); }
     // iPhone: im Modus „nur Wiedergabe“ liefert das Mikrofon Stille – vor der Aufnahme umstellen
     micOn = true; audioSession('auto');
     var gum = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
       .catch(function (e) { if (e && (e.name === 'OverconstrainedError' || e.name === 'TypeError' || e.name === 'NotReadableError')) return navigator.mediaDevices.getUserMedia({ audio: true }); throw e; });
     return gum.then(function (stream) {
+      if (self.gen !== gen) { stream.getTracks().forEach(function (t) { t.stop(); }); var ce = new Error('cancelled'); ce.name = 'Cancelled'; throw ce; }
       var ctx = Snd.resume();
       self.stream = stream;
       try { if (ctx.state !== 'running') ctx.resume(); } catch (e) { /* ignorieren */ }
@@ -2472,8 +2619,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.start = function (onNote, getTargets, onLevel) {
     var self = this;
     return this.open().then(function (io) {
-      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, P: calP() });
+      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, trace: window.__tastoTrace || null, P: calP(), learned: Learn });
       self.det = det;
+      clearInterval(self.saveT); self.saveT = setInterval(function () { if (det.learnState) mergeLearn(det.learnState()); }, 8000);
       self.timer = setInterval(function () {
         io.fresh();
         var now = perf(), evs = det.tick(now, io, getTargets);
@@ -2487,7 +2635,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.monitor = function (onPicks, onLevel) {
     var self = this;
     return this.open().then(function (io) {
-      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, P: calP() });
+      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, P: calP(), learned: Learn });
       self.timer = setInterval(function () {
         io.fresh();
         var lv = io.rms(1024);
@@ -2513,9 +2661,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     });
   };
   Mic.prototype.stop = function () {
+    this.gen++;
     if (this.rec) { try { this.rec.mr.stop(); } catch (e) { /* ignorieren */ } this.rec = null; }
     micOn = false; audioSession('playback');
-    clearInterval(this.timer); this.timer = null;
+    clearInterval(this.timer); this.timer = null; clearInterval(this.saveT); this.saveT = null;
+    if (this.det && this.det.learnState) { try { mergeLearn(this.det.learnState()); } catch (e) { /* ignorieren */ } }
+    this.det = null;
     if (this.nodes) { try { this.nodes[0].disconnect(); } catch (e) { /* ignorieren */ } this.nodes = null; }
     if (this.stream) { this.stream.getTracks().forEach(function (t) { t.stop(); }); this.stream = null; }
   };
@@ -2940,6 +3091,13 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var wk = 0, d0 = new Date(); for (var i = 0; i < 7; i++) { wk += Days[dayKey(d0)] || 0; d0.setDate(d0.getDate() - 1); }
       stats.querySelector('.week').textContent = fmtMin(wk);
       view.appendChild(stats);
+      // Klavier einstellen: gut sichtbar, solange es noch nicht gemacht ist
+      if (!S.cal && !ENV.artifact) view.appendChild(el('button', { class: 'setup-card', onclick: function () { calibrate(showLibrary); } }, [
+        el('span', { class: 'setup-ic' }, [icon('target')]),
+        el('div', {}, [el('b', { text: 'Klavier einstellen' }), el('span', { text: 'Spiel ein paar Töne an – Tasto lernt dein Klavier und erkennt danach sicherer, was du spielst. Dauert etwa eine Minute.' })]),
+        icon('chevr')]));
+      else if (S.cal) view.appendChild(el('div', { class: 'setup-ok' }, [icon('check'), el('span', { text: 'Klavier eingestellt' + (learnedCount() ? ' · ' + learnedCount() + ' Töne gelernt' : '') }),
+        el('button', { class: 'btn sm', text: 'Neu einstellen', onclick: function () { calibrate(showLibrary); } })]));
       var resume = el('div');
       view.appendChild(resume);
       view.appendChild(el('div', { class: 'lib-head' }, [
@@ -2982,7 +3140,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         });
       });
       if (!S.introSeen) setTimeout(showIntro, 300);
-      else if (S.lastVersion !== VERSION) setTimeout(function () { toast('Neue Version ' + VERSION + ' ist geladen', 3500); }, 400);
+      else if (!S.cal && !setupAsked) { setupAsked = true; setTimeout(setupPrompt, 350); }
+      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Neue Version ' + VERSION + ' ist geladen', 3500); }, 400);
       if (S.lastVersion !== VERSION) { S.lastVersion = VERSION; saveSettings(); }
     });
   }
@@ -3031,6 +3190,21 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     });
     document.body.appendChild(inp); inp.click();
   }
+  var setupAsked = false;
+  // erscheint beim Start, bis das Klavier eingestellt ist
+  function setupPrompt() {
+    if (S.cal || ENV.artifact) return;
+    overlay(function (box, close) {
+      box.classList.add('setup-box');
+      box.appendChild(el('div', { class: 'setup-hero' }, [icon('target')]));
+      box.appendChild(el('h2', { text: 'Klavier einstellen' }));
+      box.appendChild(el('p', { class: 'hint', text: 'Damit Tasto deine Töne zuverlässig erkennt, hört es sich dein Klavier einmal an: kurz Ruhe, dann ein A und ein paar einzelne Töne. Danach lernt Tasto beim Üben weiter dazu.' }));
+      box.appendChild(el('p', { class: 'hint', text: 'Leg das iPhone dorthin, wo es auch beim Üben liegt.' }));
+      box.appendChild(el('div', { class: 'acts' }, [
+        el('button', { class: 'btn', text: 'Später', onclick: close }),
+        el('button', { class: 'btn primary', onclick: function () { close(); calibrate(showLibrary); } }, [icon('target'), 'Jetzt einstellen'])]));
+    });
+  }
   function showIntro() {
     overlay(function (box, close) {
       box.classList.add('intro'); S.introSeen = true; saveSettings();
@@ -3039,12 +3213,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         ['camera', 'Noten einscannen', 'Fotografiere dein Notenblatt. Tasto findet die Notenzeilen, Claude liest sie Takt für Takt und prüft, ob alles aufgeht.'],
         ['spark', 'Drei Schwierigkeitsgrade', 'Aus jedem Stück macht Tasto eine leichte Version (Melodie und Basston), eine mittlere und das Original.'],
         ['falls', 'Wasserfall', 'Die Noten fallen auf die Tasten zu. Die Klaviatur füllt die ganze Breite, alle Funktionen klappst du oben über den Titel auf.'],
-        ['mic', 'Echtes Klavier', 'Stell „Hören über: Mikrofon“ ein. Tasto hört, ob du die richtigen Töne triffst, und geht im Modus „Üben“ erst dann weiter.'],
+        ['mic', 'Echtes Klavier', 'Öffnest du ein Stück, hört Tasto automatisch über das Mikrofon zu und geht im Modus „Üben“ erst weiter, wenn du die richtigen Töne triffst. Vorher einmal „Klavier einstellen“.'],
         ['loop', 'Schwierige Stellen', 'Unter „Wiederholen“ wählst du Takte für eine Schleife. Im Takt wird das Tempo automatisch schneller, sobald es sitzt.']
       ];
 
       box.appendChild(el('div', { class: 'intro-list' }, steps.map(function (s) { return el('div', { class: 'intro-item' }, [icon(s[0]), el('div', {}, [el('b', { text: s[1] }), el('span', { text: s[2] })])]); })));
-      box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn primary', text: 'Los geht’s', onclick: function () { S.introSeen = true; saveSettings(); close(); } })]));
+      box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn primary', text: 'Los geht’s', onclick: function () { S.introSeen = true; saveSettings(); close(); if (!S.cal) { setupAsked = true; setTimeout(setupPrompt, 250); } } })]));
     });
   }
   function seedSamples() {
@@ -3267,6 +3441,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   function levelName(l) { for (var i = 0; i < LEVELS.length; i++) if (LEVELS[i][0] === l) return LEVELS[i][1]; return 'Original'; }
 
   function showPractice(id) {
+    Snd.resume(); // noch im Tipp: Audio freischalten, damit das Mikrofon gleich starten darf
     Store.get(id).then(function (piece) {
       if (!piece) return showLibrary();
       if (!piece.abc || !PC.parseABC(piece.abc).ok) return showEditor(piece);
@@ -3306,7 +3481,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var modeSeg = seg([['wait', 'Üben'], ['play', 'Im Takt'], ['demo', 'Hören']], function () { return st.mode; }, setMode);
     var levelSeg = seg(LEVELS, function () { return st.level; }, setLevel);
     var handSeg = seg([['R', 'Rechts', 'r'], ['L', 'Links', 'l'], ['RL', 'Beide']], function () { return st.hands; }, setHands);
-    var inputSeg = seg([['tap', 'Bildschirm'], ['mic', 'Mikrofon']].concat(navigator.requestMIDIAccess ? [['midi', 'MIDI']] : []), function () { return st.input; }, setInput);
+    var inputSeg = seg([['tap', 'Bildschirm'], ['mic', 'Mikrofon']].concat(navigator.requestMIDIAccess ? [['midi', 'MIDI']] : []), function () { return st.input; }, function (v) { S.inputPref = v; saveSettings(); setInput(v); });
     var tempoOut = el('output');
     var tempoStep = el('div', { class: 'step' }, [el('button', { 'aria-label': 'Langsamer', text: '−', onclick: function () { setPct(st.pct - 5); } }), tempoOut, el('button', { 'aria-label': 'Schneller', text: '+', onclick: function () { setPct(st.pct + 5); } })]);
     var metroBtn = el('button', { class: 'toggle', 'aria-pressed': 'false', onclick: function () { st.metro = !st.metro; metroBtn.setAttribute('aria-pressed', st.metro); } }, [icon('metro'), 'Metronom']);
@@ -3315,7 +3490,16 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       el('button', { class: 'btn sm', onclick: function () { pickLoop(); } }, [icon('loop'), 'Stelle wählen']),
       el('button', { class: 'btn sm', 'data-k': 'clear', onclick: function () { setLoop(null); } }, ['Ganzes Stück'])]);
     var diagBtn = el('button', { class: 'btn sm', hidden: true, onclick: toggleDiag }, [icon('mic'), 'Diagnose aufnehmen']);
-    var calBtn = el('button', { class: 'btn sm', onclick: function () { var was = st.input === 'mic'; stopInput(); toggleDrawer(false); calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }); } }, [icon('target'), 'Klavier einmessen']);
+    var calBtn = el('button', { class: 'btn sm', onclick: function () { var was = st.input === 'mic'; stopInput(); toggleDrawer(false); calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }); } }, [icon('target'), 'Klavier einstellen']);
+    var teachBtn = el('button', { class: 'btn sm', onclick: teachPiece }, [icon('spark'), 'Stück anlernen']);
+    function teachPiece() {
+      var seen = {}, list = [];
+      st.steps.forEach(function (s) { s.notes.forEach(function (n) { if (!seen[n.midi]) { seen[n.midi] = 1; list.push(n.midi); } }); });
+      list.sort(function (a, b) { return a - b; });
+      if (!list.length) return;
+      var was = st.input === 'mic'; stopInput(); toggleDrawer(false);
+      calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }, { teach: list.slice(0, 30), title: 'Stück anlernen' });
+    }
     function toggleDiag() {
       if (!mic.rec) {
         if (!mic.startRec()) { toast('Aufnehmen geht in diesem Browser nicht.', 3000); return; }
@@ -3342,7 +3526,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function drow(label, ctl) { return el('div', { class: 'drow' }, [el('span', { class: 'dl', text: label }), ctl]); }
     drawer.appendChild(el('div', { class: 'dgrid' }, [
       drow('Modus', modeSeg), drow('Schwierigkeit', levelSeg), drow('Hände', handSeg),
-      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', el('div', { class: 'row' }, [inputSeg, calBtn, diagBtn])), drow('Wiederholen', loopRow)
+      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', el('div', { class: 'row' }, [inputSeg, calBtn, teachBtn, diagBtn])), drow('Wiederholen', loopRow)
     ]));
     drawer.appendChild(el('div', { class: 'dacts' }, [
       el('button', { class: 'btn sm', onclick: function () { restart(); toggleDrawer(false); } }, [icon('restart'), 'Von vorn']),
@@ -3355,7 +3539,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var fall = el('div', { class: 'st-fall' });
     var pill = el('div', { class: 'st-pill', 'aria-live': 'polite' }), prog = el('div', { class: 'st-prog' }, [el('i')]);
     var big = el('div', { class: 'st-big', hidden: true });
-    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(big);
+    var heardEl = el('div', { class: 'st-heard', hidden: true, 'aria-live': 'off' }, [icon('mic'), el('span', { text: '…' })]);
+    fall.appendChild(prog); fall.appendChild(pill); fall.appendChild(big); fall.appendChild(heardEl);
     var keysBox = el('div', { class: 'st-keys' });
     stage.appendChild(hud); stage.appendChild(drawer); stage.appendChild(scorePanel); stage.appendChild(fall); stage.appendChild(keysBox);
     root.appendChild(stage);
@@ -3380,6 +3565,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var rzT = null; function onResize() { clearTimeout(rzT); rzT = setTimeout(function () { if (root.contains(stage)) relayout(); }, 150); }
     window.addEventListener('resize', onResize);
     if (!S.stageHint) { S.stageHint = true; saveSettings(); setTimeout(function () { toast('Tippe oben auf den Titel für alle Funktionen', 3200); }, 600); }
+    // Mikrofon automatisch an (außer du hast „Bildschirm“ gewählt oder es geht hier nicht)
+    if (!ENV.artifact && S.inputPref !== 'tap' && S.inputPref !== 'midi' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) setTimeout(function () { if (root.contains(stage) && st.input === 'tap') setInput('mic', true); }, 200);
 
     /* ------ Hilfen ------ */
     function persist() { piece.pct = st.pct; piece.hands = st.hands; piece.loop = st.loop; piece.level = st.level; Store.put(piece).catch(function () { /* ignorieren */ }); }
@@ -3446,6 +3633,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var map = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; });
       kb.setTargets(map); kb.reveal(s.notes.map(function (n) { return n.midi; }));
       notation.setStep(i, quiet || scorePanel.hidden);
+      // neuer Schritt: gleiche Taste muss neu angeschlagen werden (gehaltene Taste zählt nicht)
+      if (mic.det && mic.det.step) mic.det.step(perf());
       if (mic.rec) mic.rec.steps.push([+perf().toFixed(3), i, s.notes.map(function (n) { return n.midi; }).join(',')]);
       updateStatus();
     }
@@ -3454,7 +3643,11 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var txt;
       if (st.mode === 'demo') txt = st.demo && s ? '<em>Takt ' + s.bar + '</em> wird vorgespielt' : '<em>Hören</em> Tippe auf ▶';
       else if (st.mode === 'play' && !st.play) txt = '<em>Im Takt</em> Tippe auf ▶ zum Einzählen';
-      else if (s) txt = s.notes.map(noteLabel).join('<i>+</i>');
+      else if (s) {
+        txt = s.notes.map(noteLabel).join('<i>+</i>');
+        var prevS = st.mode === 'wait' && st.input === 'mic' && st.i > 0 ? st.steps[st.i - 1] : null;
+        if (prevS && s.notes.some(function (n) { return prevS.notes.some(function (q) { return q.midi === n.midi; }); })) txt += '<small class="again">neu anschlagen</small>';
+      }
       else txt = '<em>Fertig</em>';
       pill.innerHTML = txt + (st.input === 'mic' ? '' : '');
       var r = loopRange(), a = st.steps[r[0]], frac = s && a ? (st.i - r[0]) / Math.max(1, r[1] - r[0] + 1) : 0;
@@ -3493,30 +3686,36 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (!l || l.b != null) { st.loop = { a: n, b: null }; notation.setLoop(st.loop); toast('Tippe auf den letzten Takt der Stelle', 2200); }
       else setLoop({ a: Math.min(l.a, n), b: Math.max(l.a, n) });
     }
-    function setInput(v) {
+    function setInput(v, auto) {
       stopInput(); st.input = v; renderAll(); diagBtn.hidden = v !== 'mic';
-      if (v === 'mic') startMic(); else if (v === 'midi') startMidi();
+      if (v === 'mic') startMic(auto); else if (v === 'midi') startMidi();
     }
-    function stopInput() { mic.stop(); micDot.hidden = true; }
-    function startMic() {
+    function stopInput() { mic.stop(); micDot.hidden = true; heardEl.hidden = true; }
+    function startMic(auto) {
       Snd.resume();
-      var heardAt = perf(), warned = false;
+      var heardAt = perf(), warned = false, hT = 0, lastHeard = 0, hSpan = heardEl.lastChild;
       mic.start(function (midi, t, kind) { handleNote(midi, t, kind); }, targetsNow, function (lv, db) {
         micDot.lastChild.style.transform = 'scaleY(' + (0.15 + lv * 0.85).toFixed(2) + ')';
+        var nowH = perf();
+        if (nowH - hT > 0.12 && mic.det && mic.det.heard) {
+          hT = nowH; var hs = mic.det.heard();
+          if (hs.length) { lastHeard = nowH; hSpan.textContent = hs.slice(0, 4).sort(function (a, b) { return a - b; }).map(PC.midiLabel).join(' '); heardEl.classList.add('on'); }
+          else if (nowH - lastHeard > 0.6) { hSpan.textContent = db > -60 ? '…' : 'leise'; heardEl.classList.remove('on'); }
+        }
         if (db > -72) heardAt = perf();
         else if (!warned && perf() - heardAt > 8) { warned = true; toast('Das Mikrofon liefert kaum Ton. Prüfe die Mikrofon-Freigabe für Safari bzw. Chrome und ob ein Kopfhörer verbunden ist.', 6000); }
       })
         .then(function () {
-          micDot.hidden = false;
-          if (!S.cal && !calAsked) { calAsked = true; overlay(function (box, close) {
-            box.appendChild(el('h2', { text: 'Klavier einmessen?' }));
-            box.appendChild(el('p', { class: 'hint', text: 'Für eine zuverlässige Erkennung hört sich Tasto dein Klavier einmal an: Stimmung, Lautstärke, ein paar Töne. Das dauert etwa eine Minute.' }));
-            box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn', text: 'Später', onclick: close }), el('button', { class: 'btn primary', text: 'Jetzt einmessen', onclick: function () { close(); stopInput(); calibrate(function () { if (root.contains(stage)) setInput('mic'); }); } })]));
-          }); }
-          else toast('Mikrofon an: spiel auf deinem Klavier', 2600);
+          micDot.hidden = false; heardEl.hidden = false;
+          if (!root.contains(stage)) { mic.stop(); return; }
+          if (!S.cal && !calAsked) { calAsked = true; toast('Mikrofon an. Tipp: Oben über den Titel → „Klavier einstellen“, dann erkennt Tasto dich sicherer.', 4500); }
+          else toast('Mikrofon an – spiel einfach los', 2200);
         })
         .catch(function (e) {
+          if (e && e.name === 'Cancelled') return;
           st.input = 'tap'; renderAll(); diagBtn.hidden = true;
+          if (auto && micAutoFailed) { toast('Mikrofon nicht verfügbar – Eingabe über den Bildschirm.', 3000); return; }
+          if (auto) micAutoFailed = true;
           micHelp(e, function () { setInput('mic'); });
         });
     }
@@ -3751,21 +3950,24 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   }
 
   /* ================= Klavier einmessen ================= */
-  var calAsked = false;
+  var calAsked = false, micAutoFailed = false;
   function calP() { return S.cal ? { accept: S.cal.accept, riseDb: S.cal.riseDb, gateDb: S.cal.gateDb } : null; }
-  function calibrate(after) {
+  function calibrate(after, opts) {
+    opts = opts || {};
     var mic = new Mic(), det = null, io = null, timer = null, stage = null, rec = { notes: [], log: [] }, closed = false, recording = false;
-    var NOTES = [[60, 'C', 'das mittlere C'], [64, 'E', 'das E über dem mittleren C'], [67, 'G', 'das G über dem mittleren C'], [72, 'C', 'das C eine Oktave höher'],
+    var TEACH = !!opts.teach;
+    var NOTES = TEACH ? opts.teach.map(function (m) { return [m, PC.midiLabel(m), 'das ' + PC.midiLabel(m)]; }) : [[60, 'C', 'das mittlere C'], [64, 'E', 'das E über dem mittleren C'], [67, 'G', 'das G über dem mittleren C'], [72, 'C', 'das C eine Oktave höher'],
       [76, 'E', 'das E eine Oktave höher'], [55, 'G', 'das G unter dem mittleren C'], [48, 'C', 'das C eine Oktave tiefer'], [43, 'G', 'das tiefe G (linke Hand)']];
     var title, big, sub, meterI, list, acts, closeFn;
     overlay(function (box, close) {
       box.classList.add('calib'); closeFn = close;
-      title = el('h2', { text: 'Klavier einmessen' });
+      title = el('h2', { text: opts.title || 'Klavier einstellen' });
       big = el('div', { class: 'cal-big', text: '' }); sub = el('p', { class: 'hint' });
       meterI = el('i'); list = el('div', { class: 'cal-list' }); acts = el('div', { class: 'acts' });
       box.appendChild(title); box.appendChild(sub); box.appendChild(big);
       box.appendChild(el('div', { class: 'meter big' }, [meterI])); box.appendChild(list); box.appendChild(acts);
-      sub.textContent = 'Tasto hört sich dein Klavier einmal genau an: Stimmung, Lautstärke und wie jeder Ton bei dir klingt. Das dauert etwa eine Minute. Leg das iPhone so hin, wie du später übst.';
+      sub.textContent = TEACH ? 'Spiel nacheinander jeden Ton dieses Stücks einmal an (' + NOTES.length + ' Töne). Tasto merkt sich, wie jeder Ton bei dir klingt, und erkennt ihn danach sicherer.'
+        : 'Tasto hört sich dein Klavier einmal genau an: Stimmung, Lautstärke und wie jeder Ton bei dir klingt. Das dauert etwa eine Minute. Leg das iPhone so hin, wie du später übst.';
       setActs([['Abbrechen', close], ['Los geht’s', start, true]]);
     }, function () { closed = true; clearInterval(timer); mic.stop(); if (after) after(); });
     function setActs(a) { clear(acts); a.forEach(function (x) { acts.appendChild(el('button', { class: 'btn' + (x[2] ? ' primary' : ''), text: x[0], onclick: x[1] })); }); }
@@ -3777,7 +3979,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         io = x; det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: 0 });
         recording = mic.startRec();
         loop(silence());
-      }).catch(function (e) { closeFn(); micHelp(e, function () { calibrate(after); }); });
+      }).catch(function (e) { closeFn(); if (e && e.name === 'Cancelled') return; micHelp(e, function () { calibrate(after, opts); }); });
     }
     // Ablauf als Folge von Schritten; jeder Schritt bekommt alle 24 ms (now, db) und meldet „fertig“
     function loop(step) {
@@ -3792,7 +3994,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       }, 24);
     }
     function silence() {
-      big.textContent = 'Ruhe bitte'; sub.textContent = 'Spiel kurz nichts – Tasto misst das Grundrauschen (3 Sekunden).';
+      var dur = TEACH ? 1.6 : 3;
+      big.textContent = 'Ruhe bitte'; sub.textContent = 'Spiel kurz nichts – Tasto misst das Grundrauschen.';
       var t0 = null, dbs = [], floors = [];
       return function (now, db) {
         if (t0 === null) t0 = now;
@@ -3800,11 +4003,11 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           dbs.push(db);
           var S0 = io.spec(4096), arr = []; for (var k = 9; k < 340; k += 3) arr.push(S0[k]); arr.sort(function (a, b) { return a - b; }); floors.push(arr[arr.length >> 1]);
         }
-        if (now - t0 < 3) return null;
+        if (now - t0 < dur) return null;
         dbs.sort(function (a, b) { return a - b; }); floors.sort(function (a, b) { return a - b; });
         rec.noise = dbs[dbs.length >> 1]; rec.floor = floors[floors.length >> 1];
-        row('Grundrauschen', rec.noise < -45, Math.round(rec.noise) + ' dB' + (rec.noise >= -45 ? ' – ziemlich laut, ist es ruhig im Raum?' : ''));
-        return tuning();
+        if (!TEACH) row('Grundrauschen', rec.noise < -45, Math.round(rec.noise) + ' dB' + (rec.noise >= -45 ? ' – ziemlich laut, ist es ruhig im Raum?' : ''));
+        return TEACH ? notes(0) : tuning();
       };
     }
     function waitOnset() {
@@ -3832,7 +4035,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     }
     function noteLabel(n) { return n[1] + ' – ' + n[2]; }
     function notes(i) {
-      if (i >= NOTES.length) return chord();
+      if (i >= NOTES.length) return TEACH ? 'done' : chord();
       var n = NOTES[i];
       big.textContent = PC.midiLabel(n[0]); sub.textContent = 'Spiel ' + n[2] + ' (' + (i + 1) + ' von ' + NOTES.length + ').';
       var onset = waitOnset(), tOn = null, t0 = null, pre = null, best = { sal: 0, rise: 0 }, heard = {};
@@ -3850,6 +4053,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         if (now - tOn < 0.9) return null;
         var top = Object.keys(heard).sort(function (a, b) { return heard[b] - heard[a]; }).slice(0, 2).map(Number);
         var ok = best.sal >= 0.3;
+        if (best.sal >= 0.08) { var L0 = Learn[n[0]], rz = best.rise >= 6 ? best.rise : 10; Learn[n[0]] = { sal: +(L0 && L0.n ? (L0.sal + best.sal) / 2 : best.sal).toFixed(3), rise: +(L0 && L0.n ? (L0.rise + rz) / 2 : rz).toFixed(2), n: 3 }; }
         rec.notes.push({ midi: n[0], sal: +best.sal.toFixed(2), rise: +best.rise.toFixed(1), heard: top });
         row(PC.midiLabel(n[0]), ok, ok ? 'klar erkannt (' + Math.round(best.sal * 100) + ' %)' : 'schwach' + (top.length ? ' – gehört: ' + top.map(PC.midiLabel).join(', ') : ''));
         return pause(function () { return notes(i + 1); });
@@ -3870,7 +4074,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       };
     }
     function finish() {
+      saveLearn();
       var played = rec.notes.filter(function (n) { return !n.skipped; });
+      if (TEACH) {
+        var good = played.filter(function (n) { return n.sal >= 0.3; }).length;
+        big.textContent = played.length + ' von ' + NOTES.length;
+        sub.textContent = 'Angelernt und gespeichert. ' + (good < played.length ? (played.length - good) + ' Töne kamen schwach an – Tasto achtet bei ihnen jetzt besonders genau hin.' : 'Alle Töne kamen klar an.');
+        setActs([['Fertig', closeFn, true]]);
+        return;
+      }
       var sals = played.map(function (n) { return n.sal; }).concat(rec.chord ? [rec.chord.c, rec.chord.e] : []).sort(function (a, b) { return a - b; });
       var rises = played.map(function (n) { return n.rise; }).sort(function (a, b) { return a - b; });
       var q = function (a, f) { return a.length ? a[Math.floor((a.length - 1) * f)] : null; };
@@ -3883,7 +4095,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       };
       S.cal = cal; S.a4 = cal.a4; S.sens = 0; saveSettings();
       big.textContent = cal.ok + ' von ' + NOTES.length;
-      sub.textContent = 'Eingemessen und gespeichert. Tasto ist jetzt auf dein Klavier und deinen Raum eingestellt' + (cal.ok < NOTES.length - 1 ? '. Einige Töne kamen schwach an – leg das iPhone näher ans Klavier oder dreh das Piano etwas lauter und miss nochmal ein.' : '.');
+      sub.textContent = 'Eingestellt und gespeichert. Tasto ist jetzt auf dein Klavier und deinen Raum eingestellt' + (cal.ok < NOTES.length - 1 ? '. Einige Töne kamen schwach an – leg das iPhone näher ans Klavier oder dreh das Piano etwas lauter und miss nochmal ein.' : '.');
       var buttons = [['Fertig', closeFn, true]];
       if (recording) buttons.unshift(['Messdaten speichern', function () {
         mic.stopRec().then(function (r) {
@@ -3961,8 +4173,10 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       box.appendChild(group('Mikrofon', [
         slider('Empfindlichkeit', 'sens', -10, 15, 1, function (v) { return (v > 0 ? '+' : '') + v + ' dB'; }),
         slider('Stimmung A4', 'a4', 430, 450, 1, function (v) { return v + ' Hz'; }),
-        el('button', { class: 'btn primary', onclick: function () { close(); calibrate(); } }, [icon('target'), S.cal ? 'Klavier neu einmessen' : 'Klavier einmessen']),
-        S.cal ? el('p', { class: 'hint', text: 'Eingemessen am ' + new Date(S.cal.date).toLocaleDateString('de-DE') + ': ' + S.cal.ok + ' von ' + S.cal.total + ' Tönen klar, Stimmung A = ' + S.cal.a4 + ' Hz.' }) : null,
+        el('button', { class: 'btn primary', onclick: function () { close(); calibrate(); } }, [icon('target'), S.cal ? 'Klavier neu einstellen' : 'Klavier einstellen']),
+        S.cal ? el('p', { class: 'hint', text: 'Eingestellt am ' + new Date(S.cal.date).toLocaleDateString('de-DE') + ': ' + S.cal.ok + ' von ' + S.cal.total + ' Tönen klar, Stimmung A = ' + S.cal.a4 + ' Hz.' }) : null,
+        el('p', { class: 'hint', text: learnedCount() ? 'Tasto hat sich ' + learnedCount() + ' Töne deines Klaviers gemerkt und lernt beim Üben weiter.' : 'Tasto lernt beim Einstellen und beim Üben, wie deine Töne klingen.' }),
+        learnedCount() ? el('button', { class: 'btn sm', onclick: function () { Learn = {}; saveLearn(); toast('Gelerntes gelöscht'); close(); } }, ['Gelerntes zurücksetzen']) : null,
         el('button', { class: 'btn', onclick: function () { close(); micTest(); } }, [icon('mic'), 'Mikrofon testen']),
         el('p', { class: 'hint', text: 'Stell das Handy neben das Klavier, nicht darauf. Im Modus „Mikro“ sind Tastenton, Begleitung und Metronom stumm, damit Tasto nur dich hört.' })
       ]));
