@@ -1323,11 +1323,11 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     var sr = opt.sr || 48000, a4 = opt.a4 || 440;
     var P = {
       riseDb: 6.5, accept: 0.40, acceptHi: 0.72, wrong: 0.62, wrongRise: 7, gateDb: -95,
-      fluxK: 2.6, fluxMin: 0.9, repAtt: 3, repFlux: 0.8, floorGap: -99
+      fluxK: 2.6, fluxMin: 0.9, repAtt: 2.6, repFlux: 0.8, floorGap: -99
     };
     function setSens(s) { // s: -10 … +15 (dB, größer = empfindlicher)
       s = s || 0;
-      P.riseDb = Math.max(3.5, 6.5 - s * 0.18); P.accept = Math.max(0.3, 0.40 - s * 0.006); P.gateDb = -95 - s;
+      P.riseDb = Math.max(3.5, 5 - s * 0.15); P.accept = Math.max(0.26, 0.35 - s * 0.006); P.gateDb = -95 - s;
     }
     setSens(opt.sens || 0);
     if (opt.P) Object.keys(opt.P).forEach(function (k) { P[k] = opt.P[k]; });
@@ -1434,7 +1434,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     var prevS = null, fluxHist = [], lastOnset = -9, onsetT = -9, pre = null;
     var hist = {}; // midi -> [{t,e}]
     var lastHitT = -9, lastHitE = -200, freshUntil = {}, lastEmit = {}, cnt = {}, wrongDone = {}, ringSeen = {}, ringSet = {}, since = {}, peakAfter = {}, armed = {}, onsetTargets = [];
-    var lastLarge = -9, resL = null, level = -100, dbg = opt.debug || null;
+    var lastLarge = -9, resL = null, level = -100, dbg = opt.debug || null, lastSal = {};
 
     function pushHist(m, t, e) {
       var h = hist[m] || (hist[m] = []);
@@ -1533,6 +1533,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         }
         var ready = lastEmit[t] == null || armed[t];
         var rise = riseOf(t, now), sal = Math.max(salOf(t), tsOf(t));
+        lastSal[t] = { v: sal, t: now };
         // Unterton eines gerade gespielten höheren Tons? Dann müssen eigene, nicht geteilte Teiltöne klar da sein
         var rel = recent.filter(function (r) { var d = r - t; return targets.indexOf(r) < 0 && (d === 12 || d === 19 || d === 24 || d === 28 || d === 31); });
         if (rel.length && sal >= P.accept) {
@@ -1612,6 +1613,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     return {
       tick: tick, setSens: setSens, small: SMALL, large: LARGE,
       level: function () { return level; },
+      presence: function (m, now) { var x = lastSal[m]; return x && now - x.t < 0.3 ? x.v : 0; },
       reset: function () { prevS = null; fluxHist = []; hist = {}; lastEmit = {}; cnt = {}; ringSeen = {}; resL = null; },
       // Live-Ansicht (Mikrofon-Test): alle erkannten Töne
       monitor: function (io) {
@@ -2415,7 +2417,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.open = function () {
     var self = this;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('unsupported'));
-    micOn = true; audioSession('play-and-record');
+    micOn = true;
     return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } }).then(function (stream) {
       var ctx = Snd.resume();
       self.stream = stream;
@@ -2446,7 +2448,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         io.fresh();
         var now = perf(), evs = det.tick(now, io, getTargets);
         if (onLevel) onLevel(clamp((det.level() + 70) / 50, 0, 1), det.level());
-        evs.forEach(function (e) { if (window.__tastoEv) window.__tastoEv(e, getTargets(now), now); onNote(e.midi, e.t, e.kind); });
+        if (self.rec) { self.rec.lv.push([+now.toFixed(3), +det.level().toFixed(1)]); }
+        evs.forEach(function (e) { if (window.__tastoEv) window.__tastoEv(e, getTargets(now), now); if (self.rec) self.rec.ev.push([+now.toFixed(3), e.kind, e.midi, getTargets(now).join(',')]); onNote(e.midi, e.t, e.kind); });
       }, 24);
     });
   };
@@ -2463,7 +2466,24 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       }, 90);
     });
   };
+  Mic.prototype.startRec = function () {
+    if (!this.stream || !window.MediaRecorder) return false;
+    var self = this, chunks = [], mr;
+    try { mr = new MediaRecorder(this.stream); } catch (e) { return false; }
+    this.rec = { mr: mr, chunks: chunks, ev: [], lv: [], steps: [], t0: perf(), mime: mr.mimeType || 'audio/mp4' };
+    mr.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.start(500);
+    return true;
+  };
+  Mic.prototype.stopRec = function () {
+    var self = this, r = this.rec; if (!r) return Promise.resolve(null);
+    return new Promise(function (res) {
+      r.mr.onstop = function () { self.rec = null; res(r); };
+      try { r.mr.stop(); } catch (e) { self.rec = null; res(r); }
+    });
+  };
   Mic.prototype.stop = function () {
+    if (this.rec) { try { this.rec.mr.stop(); } catch (e) { /* ignorieren */ } this.rec = null; }
     micOn = false; audioSession('playback');
     clearInterval(this.timer); this.timer = null;
     if (this.nodes) { try { this.nodes[0].disconnect(); } catch (e) { /* ignorieren */ } this.nodes = null; }
@@ -3261,10 +3281,34 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     var loopRow = el('div', { class: 'row' }, [loopOut,
       el('button', { class: 'btn sm', onclick: function () { pickLoop(); } }, [icon('loop'), 'Stelle wählen']),
       el('button', { class: 'btn sm', 'data-k': 'clear', onclick: function () { setLoop(null); } }, ['Ganzes Stück'])]);
+    var diagBtn = el('button', { class: 'btn sm', hidden: true, onclick: toggleDiag }, [icon('mic'), 'Diagnose aufnehmen']);
+    function toggleDiag() {
+      if (!mic.rec) {
+        if (!mic.startRec()) { toast('Aufnehmen geht in diesem Browser nicht.', 3000); return; }
+        mic.rec.steps.push([+perf().toFixed(3), st.i, (st.steps[st.i] ? st.steps[st.i].notes.map(function (n) { return n.midi; }).join(',') : '')]);
+        clear(diagBtn); diagBtn.appendChild(icon('stop', true)); diagBtn.appendChild(document.createTextNode(' Diagnose beenden'));
+        toggleDrawer(false);
+        toast('Aufnahme läuft: spiel jetzt ganz normal ein paar Takte, dann oben „Diagnose beenden“', 4500);
+        diagTimer = setTimeout(function () { if (mic.rec) toggleDiag(); }, 60000);
+        return;
+      }
+      clearTimeout(diagTimer);
+      mic.stopRec().then(function (r) {
+        clear(diagBtn); diagBtn.appendChild(icon('mic')); diagBtn.appendChild(document.createTextNode(' Diagnose aufnehmen'));
+        if (!r) return;
+        var blob = new Blob(r.chunks, { type: r.mime });
+        return blobToDataURL(blob).then(function (audio) {
+          var data = { app: 'tasto-diagnose', v: 1, date: new Date().toISOString(), ua: navigator.userAgent, sr: mic.io && mic.io.sr, piece: piece.title, level: st.level, hands: st.hands,
+            settings: { sens: S.sens, a4: S.a4 }, t0: r.t0, steps: r.steps, events: r.ev, levels: r.lv.filter(function (x, i) { return i % 4 === 0; }), mime: r.mime, audio: audio };
+          return saveFile('Tasto-Diagnose-' + dayKey() + '.json', JSON.stringify(data), 'application/json');
+        }).then(function () { toast('Diagnose gespeichert. Schick mir die Datei im Chat.', 4000); });
+      }).catch(function () { toast('Die Diagnose konnte nicht gespeichert werden.', 3500); });
+    }
+    var diagTimer = null;
     function drow(label, ctl) { return el('div', { class: 'drow' }, [el('span', { class: 'dl', text: label }), ctl]); }
     drawer.appendChild(el('div', { class: 'dgrid' }, [
       drow('Modus', modeSeg), drow('Schwierigkeit', levelSeg), drow('Hände', handSeg),
-      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', inputSeg), drow('Wiederholen', loopRow)
+      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', el('div', { class: 'row' }, [inputSeg, diagBtn])), drow('Wiederholen', loopRow)
     ]));
     drawer.appendChild(el('div', { class: 'dacts' }, [
       el('button', { class: 'btn sm', onclick: function () { restart(); toggleDrawer(false); } }, [icon('restart'), 'Von vorn']),
@@ -3368,6 +3412,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var map = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; });
       kb.setTargets(map); kb.reveal(s.notes.map(function (n) { return n.midi; }));
       notation.setStep(i, quiet || scorePanel.hidden);
+      if (mic.rec) mic.rec.steps.push([+perf().toFixed(3), i, s.notes.map(function (n) { return n.midi; }).join(',')]);
       updateStatus();
     }
     function updateStatus() {
@@ -3415,7 +3460,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       else setLoop({ a: Math.min(l.a, n), b: Math.max(l.a, n) });
     }
     function setInput(v) {
-      stopInput(); st.input = v; renderAll();
+      stopInput(); st.input = v; renderAll(); diagBtn.hidden = v !== 'mic';
       if (v === 'mic') startMic(); else if (v === 'midi') startMidi();
     }
     function stopInput() { mic.stop(); micDot.hidden = true; }
@@ -3424,7 +3469,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       mic.start(function (midi, t, kind) { handleNote(midi, t, kind); }, targetsNow, function (lv) { micDot.lastChild.style.transform = 'scaleY(' + (0.15 + lv * 0.85).toFixed(2) + ')'; })
         .then(function () { micDot.hidden = false; toast('Mikrofon an: spiel auf deinem Klavier', 2600); })
         .catch(function (e) {
-          st.input = 'tap'; renderAll();
+          st.input = 'tap'; renderAll(); diagBtn.hidden = true;
           overlay(function (box, close) {
             box.appendChild(el('h2', { text: 'Mikrofon nicht verfügbar' }));
             box.appendChild(el('p', { class: 'hint', text: ENV.artifact ? 'Innerhalb von Claude ist das Mikrofon gesperrt. In der Tasto-App auf deinem iPhone funktioniert es.' : 'Erlaube Tasto das Mikrofon. Wurde es abgelehnt: iPhone-Einstellungen → Safari (bzw. Chrome) → Mikrofon, oder in Safari auf „aA“ → Website-Einstellungen.' }));
@@ -3470,9 +3515,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         kb.flash(m, 'ok'); falls.burst(m, 'ok');
         var n = Object.keys(st.got).length;
         if (n === tg.length) completeStep();
-        else if (tg.length >= 3 && n === tg.length - 1 && st.input === 'mic') {
-          // Akkorde: großzügig, wenn nur ein leiser Ton fehlt
-          var idx = st.i; setTimeout(function () { if (st.i === idx && Object.keys(st.got).length >= tg.length - 1 && st.mode === 'wait') completeStep(); }, 700);
+        else if (st.input === 'mic' && tg.length >= 2) {
+          // Akkorde: großzügig, wenn die übrigen Töne leise mitklingen (oder bei 3+ Tönen nur einer fehlt)
+          var idx = st.i;
+          setTimeout(function () {
+            if (st.i !== idx || st.mode !== 'wait') return;
+            var miss = tg.filter(function (x) { return !st.got[x]; }), nowT = perf();
+            var faint = miss.every(function (x) { return mic.det && mic.det.presence(x, nowT) >= 0.18; });
+            if (!miss.length || faint || (tg.length >= 3 && miss.length === 1)) completeStep();
+          }, 450);
         }
       } else {
         st.stats.wrong++; kb.flash(m, 'bad'); falls.burst(m, 'bad'); flashPill('bad');
