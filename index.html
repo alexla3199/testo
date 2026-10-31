@@ -375,6 +375,10 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .st-lvl { flex-wrap: wrap; }
 .st-lvl .lv-help { flex: 1 1 100%; display: flex; gap: 6px; flex-wrap: wrap; }
 .st-lvl .lv-help .btn.sm { background: rgba(255, 255, 255, .92); color: #141821; }
+/* Fingersatz */
+.key .kfg { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #0b1220; font: 800 13px/20px var(--f-ui); text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); pointer-events: none; }
+.key.b .kfg { bottom: 10px; width: 17px; height: 17px; font-size: 11px; line-height: 17px; }
+.st-pill .fg { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; border-radius: 50%; background: #fff; color: #0b1220; font-size: 13px; vertical-align: 2px; }
 
 </style>
 <div id="app"></div>
@@ -3417,6 +3421,116 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
 });
 
 ;
+/* Tasto – Fingersatz: für jede Hand einen gut spielbaren Fingersatz berechnen (1 = Daumen … 5 = kleiner Finger) */
+(function (root, f) { if (typeof module === 'object' && module.exports) module.exports = f(); else root.PF = f(); })(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  function isBlack(m) { return [1, 3, 6, 8, 10].indexOf(((m % 12) + 12) % 12) >= 0; }
+  // bequemer Abstand (Halbtöne) zwischen zwei Fingern, für die rechte Hand aufwärts gedacht: [klein, ideal, groß]
+  var SPAN = { '1-2': [1, 2, 5], '1-3': [3, 5, 7], '1-4': [5, 7, 9], '1-5': [7, 9, 12], '2-3': [1, 2, 4], '2-4': [3, 4, 5], '2-5': [4, 6, 8], '3-4': [1, 2, 3], '3-5': [3, 4, 5], '4-5': [1, 2, 3] };
+  // Kosten, um von Ton a (Finger fa) zu Ton b (Finger fb) zu gehen; d = b - a, für die linke Hand gespiegelt
+  function move(fa, fb, d) {
+    if (fa === fb) return d === 0 ? 0 : 7 + Math.abs(d) * 0.3;
+    if (d === 0) return 4; // gleicher Ton, anderer Finger: geht (Fingerwechsel), lieber nicht
+    var lo = Math.min(fa, fb), hi = Math.max(fa, fb), sp = SPAN[lo + '-' + hi];
+    var up = d > 0, natural = (fb > fa) === up; // höherer Ton mit höherem Finger = natürliche Richtung
+    if (natural) {
+      var a = Math.abs(d), c = 0;
+      if (a < sp[0]) c += (sp[0] - a) * 1.2;
+      else if (a > sp[2]) c += (a - sp[2]) * 2;
+      c += Math.abs(a - sp[1]) * 0.25;
+      return c;
+    }
+    // Über-/Untersetzen: nur mit dem Daumen sinnvoll (Daumen unter 2/3/4 bzw. 2/3/4 über den Daumen)
+    var a2 = Math.abs(d);
+    if (fb === 1 && fa >= 2 && fa <= 4) return 3 + (fa === 4 ? 1 : 0) + Math.max(0, a2 - 4) * 0.8;
+    if (fa === 1 && fb >= 2 && fb <= 4) return 3 + (fb === 4 ? 1 : 0) + Math.max(0, a2 - 4) * 0.8;
+    return 14 + a2;
+  }
+  // Griffe für einen Akkord (Töne aufsteigend; linke Hand wird vorher gespiegelt): Finger aufsteigend
+  function chordShapes(ps) {
+    var k = ps.length, out = [];
+    if (k === 1) { for (var f = 1; f <= 5; f++) out.push([f]); return out; }
+    if (k > 5) ps = ps.slice(0, 5), k = 5;
+    (function rec(i, from, acc) {
+      if (i === k) { out.push(acc.slice()); return; }
+      for (var g = from; g <= 5 - (k - 1 - i); g++) { acc.push(g); rec(i + 1, g + 1, acc); acc.pop(); }
+    })(0, 1, []);
+    return out;
+  }
+  function shapeCost(ps, sh) {
+    var c = 0;
+    for (var i = 0; i + 1 < ps.length; i++) {
+      var d = ps[i + 1] - ps[i], sp = SPAN[sh[i] + '-' + sh[i + 1]];
+      if (d < sp[0]) c += (sp[0] - d) * 1.5; else if (d > sp[2]) c += (d - sp[2]) * 3;
+      c += Math.abs(d - sp[1]) * 0.25;
+    }
+    var span = ps[ps.length - 1] - ps[0];
+    if (span > 12) c += (span - 12) * 4; // mehr als eine Oktave: kaum greifbar
+    // weite Griffe mit den äußeren Fingern (Dreiklang 1-3-5)
+    if (span >= 5 && sh[0] !== 1) c += 0.8;
+    if (span >= 7 && sh[sh.length - 1] !== 5) c += 0.6;
+    ps.forEach(function (p, j) { if (isBlack(p.m != null ? p.m : p) && sh[j] === 1) c += 1.5; });
+    return c;
+  }
+  // Viterbi über die Folge der Anschläge einer Hand
+  // seq: [{ t, ms: [midi...] }] (ms aufsteigend), hand: 'R'|'L' → Array der Fingerlisten (passend zu ms)
+  function fingerHand(seq, hand) {
+    var L = hand === 'L', n = seq.length; if (!n) return [];
+    var mir = function (m) { return L ? -m : m; };
+    var states = seq.map(function (s) {
+      var ps = s.ms.map(mir).sort(function (a, b) { return a - b; });
+      return chordShapes(ps).map(function (sh) {
+        var real = ps.map(function (p) { return L ? -p : p; });
+        return { sh: sh, ps: ps, real: real, own: shapeCost(ps, sh) + real.reduce(function (c, m, j) { return c + (isBlack(m) && sh[j] === 1 ? 1.5 : 0) + (isBlack(m) && sh[j] === 5 ? 0.6 : 0); }, 0) };
+      });
+    });
+    var cost = states[0].map(function (st) { return st.own + (st.sh.length === 1 ? [0, 0, 0.3, 0.5, 0.6, 1.2][st.sh[0]] : 0); }), back = [];
+    for (var i = 1; i < n; i++) {
+      var prev = states[i - 1], cur = states[i], nc = [], bk = [];
+      var gap = seq[i].t - seq[i - 1].t;
+      cur.forEach(function (b) {
+        var best = Infinity, bi = 0;
+        prev.forEach(function (a, ai) {
+          // Übergang: tiefster und höchster Ton (Handlage) – grob, aber stabil
+          var tr = move(a.sh[0], b.sh[0], b.ps[0] - a.ps[0]) * 0.6 + move(a.sh[a.sh.length - 1], b.sh[b.sh.length - 1], b.ps[b.ps.length - 1] - a.ps[a.ps.length - 1]) * 0.6;
+          if (a.sh.length === 1 && b.sh.length === 1) tr = move(a.sh[0], b.sh[0], b.ps[0] - a.ps[0]);
+          // nach einer langen Pause darf die Hand neu ansetzen
+          if (gap > 1920) tr *= 0.3;
+          var c = cost[ai] + tr;
+          if (c < best) { best = c; bi = ai; }
+        });
+        nc.push(best + b.own); bk.push(bi);
+      });
+      cost = nc; back.push(bk);
+    }
+    var bi2 = 0; cost.forEach(function (c, i) { if (c < cost[bi2]) bi2 = i; });
+    var out = new Array(n);
+    for (var k = n - 1; k >= 0; k--) {
+      var st = states[k][bi2], map = {};
+      st.real.forEach(function (m, j) { map[m] = st.sh[j]; });
+      out[k] = map;
+      if (k > 0) bi2 = back[k - 1][bi2];
+    }
+    return out;
+  }
+  // ganzes Stück: Ereignisse (PC.soundEvents) → Schlüssel "t:midi" → Finger
+  function compute(events) {
+    var res = {};
+    ['R', 'L'].forEach(function (h) {
+      var by = {}, ts = [];
+      events.forEach(function (e) { if (e.hand !== h) return; if (!by[e.t]) { by[e.t] = []; ts.push(e.t); } if (by[e.t].indexOf(e.midi) < 0) by[e.t].push(e.midi); });
+      ts.sort(function (a, b) { return a - b; });
+      // lange Stücke in Stücke teilen (Rechenzeit), an Pausen
+      var seq = ts.map(function (t) { return { t: t, ms: by[t].sort(function (a, b) { return a - b; }) }; });
+      var out = fingerHand(seq, h);
+      seq.forEach(function (s, i) { Object.keys(out[i]).forEach(function (m) { res[s.t + ':' + m] = out[i][m]; }); });
+    });
+    return res;
+  }
+  return { compute: compute, fingerHand: fingerHand };
+});
+
+;
 /* Tasto – Wasserfall: fallende Noten, exakt über den Tasten, mit Leuchten und Funken */
 (function (root) {
   'use strict';
@@ -3497,7 +3611,15 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       c.shadowBlur = 0;
       if (active) { c.fillStyle = 'rgba(255,255,255,0.28)'; rr(c, x0 + 2, yb - h + 2, Math.max(1, w * 0.28), Math.max(1, h - 4), 3); c.fill(); }
       c.globalAlpha = 1;
-      if (active && w >= 15 && h >= 20 && e.name) {
+      var fg = active && e.finger && (!o.fingers || o.fingers()) ? e.finger : 0;
+      if (fg && w >= 12 && h >= 18) {
+        // Fingerzahl: weißer Kreis unten im Balken, Notenname darüber
+        var rad = Math.min(w / 2 - 1, 10), cy = yb - rad - 3;
+        c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(x0 + w / 2, cy, rad, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#0b1220'; c.font = '800 ' + Math.round(rad * 1.35) + 'px ' + ff; c.textBaseline = 'middle';
+        c.fillText(String(fg), x0 + w / 2, cy + 0.5); c.textBaseline = 'alphabetic';
+        if (h >= rad * 2 + 22 && w >= 15 && e.name) { c.fillStyle = 'rgba(8,14,26,0.85)'; c.font = '700 ' + (w >= 24 ? 12 : 10) + 'px ' + ff; c.fillText(e.name.replace(/-?\d+$/, ''), x0 + w / 2, cy - rad - 5); }
+      } else if (active && w >= 15 && h >= 20 && e.name) {
         c.fillStyle = 'rgba(8,14,26,0.85)'; c.font = '700 ' + (w >= 24 ? 12 : 10) + 'px ' + ff;
         c.fillText(e.name.replace(/-?\d+$/, ''), x0 + w / 2, yb - 6);
       }
@@ -4050,7 +4172,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.5', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.6', VERSION_DATE = '31.10.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -4444,9 +4566,11 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     this.navL.hidden = !scrolls; this.navR.hidden = !scrolls;
     this.targets = {}; this.scroller.scrollLeft = 0;
   };
-  Keyboard.prototype.setTargets = function (map) {
+  Keyboard.prototype.setTargets = function (map, fingers) {
     var self = this;
+    (this.fgEls || []).forEach(function (x) { x.remove(); }); this.fgEls = [];
     Object.keys(this.targets || {}).forEach(function (m) { var k = self.keys[m]; if (k) { k.classList.remove('tR'); k.classList.remove('tL'); } });
+    if (fingers) Object.keys(fingers).forEach(function (m) { var k = self.keys[m]; if (k && fingers[m]) { var f = el('span', { class: 'kfg', text: String(fingers[m]) }); k.appendChild(f); self.fgEls.push(f); } });
     this.targets = map || {};
     Object.keys(this.targets).forEach(function (m) { var k = self.keys[m]; if (k) k.classList.add(self.targets[m].indexOf('R') >= 0 ? 'tR' : 'tL'); });
   };
@@ -5524,7 +5648,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     kb = new Keyboard(keysBox, onKeyDown, onKeyUp);
     notation = new NotationView(scorePanel, onMeasureTap);
     notation.fitH = true;
-    falls = new window.Falls(fall, kb, { tick: curTick, spt: spt, pps: function () { return S.pps; }, hands: function () { return st.hands; }, marks: function () { return notation.marks; } });
+    falls = new window.Falls(fall, kb, { tick: curTick, spt: spt, pps: function () { return S.pps; }, hands: function () { return st.hands; }, marks: function () { return notation.marks; }, fingers: function () { return S.fingers !== false; } });
     var range = fitRange();
     applyScore(true);
     renderAll(); renderLvl();
@@ -5567,9 +5691,14 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       return smoothTick;
     }
     function loopRange() { return st.loop && st.loop.b != null && st.steps.length ? PC.stepRange(st.steps, st.loop.a, st.loop.b) : [0, Math.max(0, st.steps.length - 1)]; }
+    var fingers = {};
     function applyScore(first) {
       score = PA.arrange(base, st.level);
-      falls.setData(PC.soundEvents(score), score.measures);
+      var evs = PC.soundEvents(score);
+      // Fingersatz für beide Hände berechnen (die Noten-KI liest keine Fingerzahlen aus dem Blatt)
+      fingers = {}; try { fingers = PF.compute(evs); } catch (e) { fingers = {}; }
+      evs.forEach(function (e) { e.finger = fingers[e.t + ':' + e.midi] || 0; });
+      falls.setData(evs, score.measures);
       range = fitRange(); kb.setRange(range.lo, range.hi);
       st.steps = PC.buildSteps(score, st.hands);
       if (!st.steps.length && st.hands !== 'RL') { st.hands = 'RL'; st.steps = PC.buildSteps(score, 'RL'); handSeg.sync(); }
@@ -5604,12 +5733,13 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       playBtn.setAttribute('aria-label', running ? 'Stopp' : st.mode === 'demo' ? 'Abspielen' : 'Start');
       playBtn.appendChild(icon(running ? 'stop' : 'play', true));
     }
-    function noteLabel(n) { return '<span class="' + (n.hand.indexOf('R') >= 0 ? 'r' : 'l') + '">' + n.name.replace(/(\D+)(-?\d+)$/, '$1<sub>$2</sub>') + '</span>'; }
+    function fingerOf(s, n) { return fingers[s.t + ':' + n.midi] || 0; }
+    function noteLabel(n, s) { var f = s && S.fingers !== false ? fingerOf(s, n) : 0; return '<span class="' + (n.hand.indexOf('R') >= 0 ? 'r' : 'l') + '">' + n.name.replace(/(\D+)(-?\d+)$/, '$1<sub>$2</sub>') + (f ? '<b class="fg">' + f + '</b>' : '') + '</span>'; }
     function showStep(i, quiet) {
       var s = st.steps[i]; st.i = i; st.stepStart = perf();
       if (!s) { kb.setTargets({}); updateStatus(); return; }
-      var map = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; });
-      kb.setTargets(map); kb.reveal(s.notes.map(function (n) { return n.midi; }));
+      var map = {}, fmap = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; fmap[n.midi] = fingerOf(s, n); });
+      kb.setTargets(map, S.fingers !== false ? fmap : null); kb.reveal(s.notes.map(function (n) { return n.midi; }));
       notation.setStep(i, quiet || scorePanel.hidden);
       // neuer Schritt: gleiche Taste muss neu angeschlagen werden (gehaltene Taste zählt nicht)
       if (mic.det && mic.det.step) { if (mic.det.setWait) mic.det.setWait(st.mode === 'wait'); mic.det.step(perf()); }
@@ -5622,7 +5752,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (st.mode === 'demo') txt = st.demo && s ? '<em>Takt ' + s.bar + '</em> wird vorgespielt' : '<em>Hören</em> Tippe auf ▶';
       else if (st.mode === 'play' && !st.play) txt = '<em>Im Takt</em> Tippe auf ▶ zum Einzählen';
       else if (s) {
-        txt = s.notes.map(noteLabel).join('<i>+</i>');
+        txt = s.notes.map(function (n) { return noteLabel(n, s); }).join('<i>+</i>');
         var prevS = st.mode === 'wait' && st.input === 'mic' && st.i > 0 ? st.steps[st.i - 1] : null;
         if (prevS && s.notes.some(function (n) { return prevS.notes.some(function (q) { return q.midi === n.midi; }); })) txt += '<small class="again">neu anschlagen</small>';
       }
@@ -6436,6 +6566,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       ]));
       box.appendChild(group('Ansicht', [
         select('Klaviatur', 'kbSize', [['fit', 'ganz sichtbar (passt sich an)'], ['m', 'mittel, zum Wischen'], ['l', 'groß, zum Wischen']], re),
+        check('Fingersätze anzeigen (1 = Daumen … 5 = kleiner Finger)', 'fingers', re, true),
         select('Tastenbeschriftung', 'labels', [['c', 'nur C'], ['all', 'alle Töne'], ['off', 'aus']], re),
         slider('Wasserfall-Tempo', 'pps', 80, 320, 10, function (v) { return v < 130 ? 'ruhig' : v < 220 ? 'mittel' : 'schnell'; })
       ]));
