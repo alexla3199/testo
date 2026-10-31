@@ -284,6 +284,12 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .version { margin: 0; padding: 4px 0 20px; text-align: center; font-size: 12px; color: var(--muted); }
 .helplist { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; }
 
+.cal-big { font: 800 54px/1.1 var(--f-title); text-align: center; color: var(--brand); min-height: 60px; }
+.cal-list { display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow: auto; }
+.cal-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 6px 10px; border-radius: 10px; background: var(--surface2); }
+.cal-row.ok b { color: var(--ok); } .cal-row.bad b { color: var(--bad); }
+.cal-row span { color: var(--muted); text-align: right; }
+
 </style>
 <div id="app"></div>
 <script>
@@ -1619,6 +1625,22 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       presence: function (m, now) { var x = lastSal[m]; return x && now - x.t < 0.3 ? x.v : 0; },
       reset: function () { prevS = null; fluxHist = []; hist = {}; lastEmit = {}; cnt = {}; ringSeen = {}; resL = null; },
       // Live-Ansicht (Mikrofon-Test): alle erkannten Töne
+      // Einmessen: Werte für einen bestimmten Ton
+      probe: function (io, m) {
+        var S = io.spec(SMALL), L = io.spec(LARGE);
+        var rS = anS.analyze(S, { gateDb: P.gateDb, accept: 0.3 }), rL = anL.analyze(L, { gateDb: P.gateDb, accept: 0.3 });
+        var a = m >= SPLIT ? (rS.sal[m] || 0) : (rL.sal[m] || 0);
+        var t = m >= SPLIT ? targetScore(S, m, binS, nbS).s : targetScore(L, m, binL, nbL).s;
+        return { sal: Math.max(a, t), e: energy(S, m) };
+      },
+      // Spitzenfrequenz nahe f (Hz) mit Interpolation – für die Stimmung
+      peakHz: function (io, f) {
+        var L = io.spec(LARGE), lo = Math.floor(f * 0.94 / binL), hi = Math.ceil(f * 1.06 / binL), km = lo;
+        for (var k = lo; k <= hi; k++) if (L[k] > L[km]) km = k;
+        var a = L[km - 1], b = L[km], c = L[km + 1], d = (a - c) / (2 * (a - 2 * b + c) || 1);
+        return { hz: (km + (isFinite(d) ? d : 0)) * binL, db: b };
+      },
+      params: function () { return P; },
       monitor: function (io) {
         var S = io.spec(SMALL), rS = anS.analyze(S, { gateDb: P.gateDb, accept: 0.5 }), rL = anL.analyze(io.spec(LARGE), { gateDb: P.gateDb, accept: 0.5 });
         return rS.picks.filter(function (p) { return p.midi >= SPLIT && p.sal >= 0.6; }).concat(rL.picks.filter(function (p) { return p.midi < SPLIT && p.sal >= 0.6; }));
@@ -2269,7 +2291,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '4.4', VERSION_DATE = '31.10.2026';
+  var VERSION = '4.5', VERSION_DATE = '31.10.2026';
   /* ================= Umgebung ================= */
   var ENV = {
     artifact: !!(window.claude && window.claude.use),
@@ -2450,7 +2472,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.start = function (onNote, getTargets, onLevel) {
     var self = this;
     return this.open().then(function (io) {
-      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null });
+      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, P: calP() });
       self.det = det;
       self.timer = setInterval(function () {
         io.fresh();
@@ -2465,7 +2487,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.monitor = function (onPicks, onLevel) {
     var self = this;
     return this.open().then(function (io) {
-      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens });
+      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, P: calP() });
       self.timer = setInterval(function () {
         io.fresh();
         var lv = io.rms(1024);
@@ -3293,6 +3315,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       el('button', { class: 'btn sm', onclick: function () { pickLoop(); } }, [icon('loop'), 'Stelle wählen']),
       el('button', { class: 'btn sm', 'data-k': 'clear', onclick: function () { setLoop(null); } }, ['Ganzes Stück'])]);
     var diagBtn = el('button', { class: 'btn sm', hidden: true, onclick: toggleDiag }, [icon('mic'), 'Diagnose aufnehmen']);
+    var calBtn = el('button', { class: 'btn sm', onclick: function () { var was = st.input === 'mic'; stopInput(); toggleDrawer(false); calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }); } }, [icon('target'), 'Klavier einmessen']);
     function toggleDiag() {
       if (!mic.rec) {
         if (!mic.startRec()) { toast('Aufnehmen geht in diesem Browser nicht.', 3000); return; }
@@ -3319,7 +3342,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function drow(label, ctl) { return el('div', { class: 'drow' }, [el('span', { class: 'dl', text: label }), ctl]); }
     drawer.appendChild(el('div', { class: 'dgrid' }, [
       drow('Modus', modeSeg), drow('Schwierigkeit', levelSeg), drow('Hände', handSeg),
-      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', el('div', { class: 'row' }, [inputSeg, diagBtn])), drow('Wiederholen', loopRow)
+      drow('Tempo', el('div', { class: 'row' }, [tempoStep, metroBtn])), drow('Hören über', el('div', { class: 'row' }, [inputSeg, calBtn, diagBtn])), drow('Wiederholen', loopRow)
     ]));
     drawer.appendChild(el('div', { class: 'dacts' }, [
       el('button', { class: 'btn sm', onclick: function () { restart(); toggleDrawer(false); } }, [icon('restart'), 'Von vorn']),
@@ -3483,7 +3506,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         if (db > -72) heardAt = perf();
         else if (!warned && perf() - heardAt > 8) { warned = true; toast('Das Mikrofon liefert kaum Ton. Prüfe die Mikrofon-Freigabe für Safari bzw. Chrome und ob ein Kopfhörer verbunden ist.', 6000); }
       })
-        .then(function () { micDot.hidden = false; toast('Mikrofon an: spiel auf deinem Klavier', 2600); })
+        .then(function () {
+          micDot.hidden = false;
+          if (!S.cal && !calAsked) { calAsked = true; overlay(function (box, close) {
+            box.appendChild(el('h2', { text: 'Klavier einmessen?' }));
+            box.appendChild(el('p', { class: 'hint', text: 'Für eine zuverlässige Erkennung hört sich Tasto dein Klavier einmal an: Stimmung, Lautstärke, ein paar Töne. Das dauert etwa eine Minute.' }));
+            box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn', text: 'Später', onclick: close }), el('button', { class: 'btn primary', text: 'Jetzt einmessen', onclick: function () { close(); stopInput(); calibrate(function () { if (root.contains(stage)) setInput('mic'); }); } })]));
+          }); }
+          else toast('Mikrofon an: spiel auf deinem Klavier', 2600);
+        })
         .catch(function (e) {
           st.input = 'tap'; renderAll(); diagBtn.hidden = true;
           micHelp(e, function () { setInput('mic'); });
@@ -3719,6 +3750,154 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     }, function () { /* URLs werden beim nächsten Öffnen neu erstellt */ });
   }
 
+  /* ================= Klavier einmessen ================= */
+  var calAsked = false;
+  function calP() { return S.cal ? { accept: S.cal.accept, riseDb: S.cal.riseDb, gateDb: S.cal.gateDb } : null; }
+  function calibrate(after) {
+    var mic = new Mic(), det = null, io = null, timer = null, stage = null, rec = { notes: [], log: [] }, closed = false, recording = false;
+    var NOTES = [[60, 'C', 'das mittlere C'], [64, 'E', 'das E über dem mittleren C'], [67, 'G', 'das G über dem mittleren C'], [72, 'C', 'das C eine Oktave höher'],
+      [76, 'E', 'das E eine Oktave höher'], [55, 'G', 'das G unter dem mittleren C'], [48, 'C', 'das C eine Oktave tiefer'], [43, 'G', 'das tiefe G (linke Hand)']];
+    var title, big, sub, meterI, list, acts, closeFn;
+    overlay(function (box, close) {
+      box.classList.add('calib'); closeFn = close;
+      title = el('h2', { text: 'Klavier einmessen' });
+      big = el('div', { class: 'cal-big', text: '' }); sub = el('p', { class: 'hint' });
+      meterI = el('i'); list = el('div', { class: 'cal-list' }); acts = el('div', { class: 'acts' });
+      box.appendChild(title); box.appendChild(sub); box.appendChild(big);
+      box.appendChild(el('div', { class: 'meter big' }, [meterI])); box.appendChild(list); box.appendChild(acts);
+      sub.textContent = 'Tasto hört sich dein Klavier einmal genau an: Stimmung, Lautstärke und wie jeder Ton bei dir klingt. Das dauert etwa eine Minute. Leg das iPhone so hin, wie du später übst.';
+      setActs([['Abbrechen', close], ['Los geht’s', start, true]]);
+    }, function () { closed = true; clearInterval(timer); mic.stop(); if (after) after(); });
+    function setActs(a) { clear(acts); a.forEach(function (x) { acts.appendChild(el('button', { class: 'btn' + (x[2] ? ' primary' : ''), text: x[0], onclick: x[1] })); }); }
+    function row(name, ok, info) { list.appendChild(el('div', { class: 'cal-row ' + (ok ? 'ok' : 'bad') }, [el('b', { text: (ok ? '✓ ' : '✗ ') + name }), el('span', { text: info })])); }
+    function start() {
+      setActs([['Abbrechen', closeFn]]);
+      big.textContent = '…'; sub.textContent = 'Mikrofon wird gestartet …';
+      mic.open().then(function (x) {
+        io = x; det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: 0 });
+        recording = mic.startRec();
+        loop(silence());
+      }).catch(function (e) { closeFn(); micHelp(e, function () { calibrate(after); }); });
+    }
+    // Ablauf als Folge von Schritten; jeder Schritt bekommt alle 24 ms (now, db) und meldet „fertig“
+    function loop(step) {
+      stage = step; clearInterval(timer);
+      timer = setInterval(function () {
+        if (closed) return;
+        io.fresh(); var now = perf(), db = io.rms(1024);
+        meterI.style.width = Math.round(clamp((db + 70) / 50, 0, 1) * 100) + '%';
+        var next = stage(now, db);
+        if (next === 'done') { clearInterval(timer); finish(); }
+        else if (next) { stage = next; }
+      }, 24);
+    }
+    function silence() {
+      big.textContent = 'Ruhe bitte'; sub.textContent = 'Spiel kurz nichts – Tasto misst das Grundrauschen (3 Sekunden).';
+      var t0 = null, dbs = [], floors = [];
+      return function (now, db) {
+        if (t0 === null) t0 = now;
+        if (now - t0 > 0.4) {
+          dbs.push(db);
+          var S0 = io.spec(4096), arr = []; for (var k = 9; k < 340; k += 3) arr.push(S0[k]); arr.sort(function (a, b) { return a - b; }); floors.push(arr[arr.length >> 1]);
+        }
+        if (now - t0 < 3) return null;
+        dbs.sort(function (a, b) { return a - b; }); floors.sort(function (a, b) { return a - b; });
+        rec.noise = dbs[dbs.length >> 1]; rec.floor = floors[floors.length >> 1];
+        row('Grundrauschen', rec.noise < -45, Math.round(rec.noise) + ' dB' + (rec.noise >= -45 ? ' – ziemlich laut, ist es ruhig im Raum?' : ''));
+        return tuning();
+      };
+    }
+    function waitOnset() {
+      var hist = [];
+      return function (now, db) {
+        hist.push([now, db]); while (hist.length && hist[0][0] < now - 0.5) hist.shift();
+        var mn = 99; hist.forEach(function (h) { if (h[1] < mn) mn = h[1]; });
+        return db > rec.noise + 12 && db - mn >= 9;
+      };
+    }
+    function tuning() {
+      big.textContent = 'A'; sub.textContent = 'Spiel das A über dem mittleren C und lass es 2 Sekunden klingen.';
+      var onset = waitOnset(), tOn = null, hz = [], t0 = null;
+      return function (now, db) {
+        if (t0 === null) t0 = now;
+        if (tOn === null) { if (onset(now, db)) tOn = now; else if (now - t0 > 12) { row('Stimmung', false, 'kein A gehört – übersprungen'); return notes(0); } return null; }
+        if (now - tOn > 0.35 && now - tOn < 1.4) { var p = det.peakHz(io, S.a4); if (p.db > (rec.floor || -120) + 25) hz.push(p.hz); }
+        if (now - tOn < 1.5) return null;
+        hz.sort(function (a, b) { return a - b; });
+        var f = hz.length ? hz[hz.length >> 1] : null;
+        if (f && f > 420 && f < 460) { rec.a4 = Math.round(f * 10) / 10; row('Stimmung', true, 'A = ' + rec.a4.toFixed(1) + ' Hz'); det = PD.createDetector({ sr: io.sr, a4: rec.a4, sens: 0 }); }
+        else row('Stimmung', false, 'nicht eindeutig – bleibt bei ' + S.a4 + ' Hz');
+        return notes(0);
+      };
+    }
+    function noteLabel(n) { return n[1] + ' – ' + n[2]; }
+    function notes(i) {
+      if (i >= NOTES.length) return chord();
+      var n = NOTES[i];
+      big.textContent = PC.midiLabel(n[0]); sub.textContent = 'Spiel ' + n[2] + ' (' + (i + 1) + ' von ' + NOTES.length + ').';
+      var onset = waitOnset(), tOn = null, t0 = null, pre = null, best = { sal: 0, rise: 0 }, heard = {};
+      return function (now, db) {
+        if (t0 === null) t0 = now;
+        var pr = det.probe(io, n[0]);
+        if (tOn === null) {
+          pre = pr.e;
+          if (onset(now, db)) tOn = now;
+          else if (now - t0 > 10) { row(PC.midiLabel(n[0]), false, 'nichts gehört – übersprungen'); rec.notes.push({ midi: n[0], skipped: true }); return notes(i + 1); }
+          return null;
+        }
+        best.sal = Math.max(best.sal, pr.sal); best.rise = Math.max(best.rise, pr.e - pre);
+        det.monitor(io).forEach(function (p) { heard[p.midi] = Math.max(heard[p.midi] || 0, p.sal); });
+        if (now - tOn < 0.9) return null;
+        var top = Object.keys(heard).sort(function (a, b) { return heard[b] - heard[a]; }).slice(0, 2).map(Number);
+        var ok = best.sal >= 0.3;
+        rec.notes.push({ midi: n[0], sal: +best.sal.toFixed(2), rise: +best.rise.toFixed(1), heard: top });
+        row(PC.midiLabel(n[0]), ok, ok ? 'klar erkannt (' + Math.round(best.sal * 100) + ' %)' : 'schwach' + (top.length ? ' – gehört: ' + top.map(PC.midiLabel).join(', ') : ''));
+        return pause(function () { return notes(i + 1); });
+      };
+    }
+    function pause(then) { var t0 = null; return function (now) { if (t0 === null) t0 = now; return now - t0 > 0.6 ? then() : null; }; }
+    function chord() {
+      big.textContent = 'C + E'; sub.textContent = 'Spiel das mittlere C und das E darüber gleichzeitig.';
+      var onset = waitOnset(), tOn = null, t0 = null, b1 = 0, b2 = 0;
+      return function (now, db) {
+        if (t0 === null) t0 = now;
+        if (tOn === null) { if (onset(now, db)) tOn = now; else if (now - t0 > 10) { row('Zweiklang', false, 'übersprungen'); return 'done'; } return null; }
+        b1 = Math.max(b1, det.probe(io, 60).sal); b2 = Math.max(b2, det.probe(io, 64).sal);
+        if (now - tOn < 0.9) return null;
+        rec.chord = { c: +b1.toFixed(2), e: +b2.toFixed(2) };
+        row('Zweiklang C + E', b1 >= 0.3 && b2 >= 0.3, 'C ' + Math.round(b1 * 100) + ' %, E ' + Math.round(b2 * 100) + ' %');
+        return 'done';
+      };
+    }
+    function finish() {
+      var played = rec.notes.filter(function (n) { return !n.skipped; });
+      var sals = played.map(function (n) { return n.sal; }).concat(rec.chord ? [rec.chord.c, rec.chord.e] : []).sort(function (a, b) { return a - b; });
+      var rises = played.map(function (n) { return n.rise; }).sort(function (a, b) { return a - b; });
+      var q = function (a, f) { return a.length ? a[Math.floor((a.length - 1) * f)] : null; };
+      var cal = {
+        date: new Date().toISOString(), a4: rec.a4 || S.a4,
+        accept: clamp((q(sals, 0.2) || 0.5) * 0.7, 0.24, 0.35),
+        riseDb: clamp((q(rises, 0.2) || 12) * 0.45, 3, 5),
+        gateDb: clamp((rec.floor || -110) + 8, -112, -70),
+        ok: played.filter(function (n) { return n.sal >= 0.3; }).length, total: NOTES.length, noise: rec.noise
+      };
+      S.cal = cal; S.a4 = cal.a4; S.sens = 0; saveSettings();
+      big.textContent = cal.ok + ' von ' + NOTES.length;
+      sub.textContent = 'Eingemessen und gespeichert. Tasto ist jetzt auf dein Klavier und deinen Raum eingestellt' + (cal.ok < NOTES.length - 1 ? '. Einige Töne kamen schwach an – leg das iPhone näher ans Klavier oder dreh das Piano etwas lauter und miss nochmal ein.' : '.');
+      var buttons = [['Fertig', closeFn, true]];
+      if (recording) buttons.unshift(['Messdaten speichern', function () {
+        mic.stopRec().then(function (r) {
+          if (!r) return;
+          var blob = new Blob(r.chunks, { type: r.mime });
+          return blobToDataURL(blob).then(function (audio) {
+            return saveFile('Tasto-Einmessung-' + dayKey() + '.json', JSON.stringify({ app: 'tasto-einmessung', v: 1, ua: navigator.userAgent, sr: io.sr, cal: cal, rec: rec, mime: r.mime, audio: audio }), 'application/json');
+          });
+        }).then(function () { toast('Gespeichert – du kannst mir die Datei schicken.', 3500); }).catch(function () { toast('Speichern nicht möglich.'); });
+      }]);
+      setActs(buttons);
+    }
+  }
+
   /* ================= Mikrofon-Hilfe ================= */
   function inAppBrowser() {
     var ua = navigator.userAgent || '';
@@ -3782,6 +3961,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       box.appendChild(group('Mikrofon', [
         slider('Empfindlichkeit', 'sens', -10, 15, 1, function (v) { return (v > 0 ? '+' : '') + v + ' dB'; }),
         slider('Stimmung A4', 'a4', 430, 450, 1, function (v) { return v + ' Hz'; }),
+        el('button', { class: 'btn primary', onclick: function () { close(); calibrate(); } }, [icon('target'), S.cal ? 'Klavier neu einmessen' : 'Klavier einmessen']),
+        S.cal ? el('p', { class: 'hint', text: 'Eingemessen am ' + new Date(S.cal.date).toLocaleDateString('de-DE') + ': ' + S.cal.ok + ' von ' + S.cal.total + ' Tönen klar, Stimmung A = ' + S.cal.a4 + ' Hz.' }) : null,
         el('button', { class: 'btn', onclick: function () { close(); micTest(); } }, [icon('mic'), 'Mikrofon testen']),
         el('p', { class: 'hint', text: 'Stell das Handy neben das Klavier, nicht darauf. Im Modus „Mikro“ sind Tastenton, Begleitung und Metronom stumm, damit Tasto nur dich hört.' })
       ]));
