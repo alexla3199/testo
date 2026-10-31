@@ -1,5 +1,5 @@
 /* Tasto – Offline-Speicher */
-var CACHE = 'tasto-202610302151';
+var CACHE = 'tasto-202610310003';
 var CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon-64.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
