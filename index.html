@@ -318,6 +318,13 @@ details pre { font: 12px/1.5 var(--f-mono); background: var(--bg); border-radius
 .rv-row.bad { border-color: color-mix(in srgb, var(--hand-l) 55%, transparent); }
 .rv-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
 .rv-img { max-width: 100%; max-height: 170px; width: auto; height: auto; justify-self: start; border-radius: 6px; background: #fff; }
+/* kleine Klaviatur beim Einspielen der Zusammenklänge */
+.mini-kb { position: relative; height: 58px; margin: 4px 0 10px; }
+.mini-kb i { position: absolute; top: 0; box-sizing: border-box; border-radius: 0 0 4px 4px; }
+.mini-kb .w { height: 100%; background: #fff; border: 1px solid color-mix(in srgb, var(--muted) 45%, transparent); }
+.mini-kb .w.c4::after { content: ''; position: absolute; left: 50%; bottom: 5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--muted); }
+.mini-kb .b { height: 60%; background: #222; z-index: 1; }
+.mini-kb .on { background: var(--hand-l) !important; border-color: var(--hand-l); }
 
 </style>
 <div id="app"></div>
@@ -1512,6 +1519,16 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       return { on: on, onT: onT, nt: nt, oc: oc };
     }
     var octUp = {}, octDn = {}, learned = {}, track = {}, nmTrack = {}, nmList = {}, stepT = -99, prevStepT = -99, stepTg = {}, prevTg = {};
+    // Zusammenklänge (beim Einstellen gelernt): wie hört die Hör-KI/der DSP diesen Ton, wenn andere Töne mitklingen?
+    var chL = {}, curMulti = false;
+    if (opt.chordLearned) Object.keys(opt.chordLearned).forEach(function (m) { var x = opt.chordLearned[m]; if (x && x.n) chL[m] = { sal: +x.sal || 0, nt: +x.nt || 0, on: +x.on || 0, n: +x.n || 0 }; });
+    function clampV(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    // Schwellen für Ton m im Akkord: aus den eingespielten Zusammenklängen (nie lockerer als die Untergrenzen)
+    function chThr(m) {
+      var c = curMulti && !P.noChordLearn ? chL[m] : null;
+      if (!c || c.n < 1 || !(c.nt > 0)) return null;
+      return { nt: clampV(c.nt * 0.7, 0.18, P.kiNote || 0.3), on: clampV(c.on * 0.7, 0.25, P.kiOn2 || 0.4), fNt: clampV(c.nt * 0.7, 0.22, P.kiFundNt || 0.45), fOn: clampV(c.on * 0.7, 0.3, P.kiFundOn || 0.5) };
+    }
     if (opt.learned) Object.keys(opt.learned).forEach(function (m) { var x = opt.learned[m]; if (x && x.n) learned[m] = { sal: +x.sal || 0, rise: +x.rise || 0, n: +x.n || 0 }; });
     function learn(m, sal, rise, w) {
       var L0 = learned[m] || { sal: sal, rise: rise, n: 0 }, a = Math.min(0.5, (w || 1) / (L0.n + 2));
@@ -1522,7 +1539,11 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     function lrn(m) { var L0 = learned[m]; if (L0 && L0.n >= 2) return L0; for (var d = 1; d <= 2; d++) { var a = learned[m - d], b = learned[m + d]; if (a && a.n >= 2) return a; if (b && b.n >= 2) return b; } return L0; }
     // beim Einstellen/Anlernen als schwach gelernt (Mikrofon/Raum schluckt diesen Ton)?
     function isWeak(m) { if (P.noWeakLoose) return false; var L0 = lrn(m); return !!(L0 && L0.n >= 2 && L0.sal < (P.weakSal || 0.7)); }
-    function accOf(m) { var L0 = lrn(m); return L0 && L0.n >= 2 ? Math.max(0.2, Math.min(P.accept, L0.sal * 0.6)) : P.accept; }
+    function accOf(m) {
+      var L0 = lrn(m), a = L0 && L0.n >= 2 ? Math.max(0.2, Math.min(P.accept, L0.sal * 0.6)) : P.accept;
+      var c = curMulti && !P.noChordLearn ? chL[m] : null; if (c && c.n >= 1 && c.sal > 0) a = Math.max(0.2, Math.min(a, c.sal * 0.6));
+      return a;
+    }
     function riseThrOf(m) { var L0 = lrn(m); return L0 && L0.n >= 2 ? Math.max(3, Math.min(P.riseDb, L0.rise * 0.55)) : P.riseDb; }
 
     function pushHist(m, t, e) {
@@ -1626,7 +1647,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       prevS = new Float32Array(S);
       specRing.push({ t: now, S: prevS }); while (specRing.length && specRing[0].t < now - 0.3) specRing.shift();
 
-      var targets = getTargets(now) || [];
+      var targets = getTargets(now) || []; curMulti = targets.length >= 2;
       Object.keys(since).forEach(function (m) { if (targets.indexOf(+m) < 0) delete since[m]; });
       targets.forEach(function (t) { if (since[t] == null) since[t] = now; if (now - stepT < 0.5) stepTg[t] = 1; });
       // Nachbarn der Ziele mitverfolgen (für den Anschlags-Vergleich)
@@ -1673,9 +1694,10 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         else {
           // Töne, die beim Einstellen als leise/schwach gelernt wurden: die KI hört sie oft nur schwach → mildere Regel
           var weakL = isWeak(t);
-          okk = !(j.oc >= (P.kiOct || 0.4) && j.nt < j.oc * 0.55) && ((P.kiLoose || weakL) ? (j.nt >= 0.15 || j.on >= 0.25 || p.sal >= 0.55) : (j.nt >= (P.kiNote || 0.3) || j.on >= (P.kiOn2 || 0.4)));
+          var ct = chThr(t);
+          okk = !(j.oc >= (P.kiOct || 0.4) && j.nt < j.oc * 0.55) && ((P.kiLoose || weakL) ? (j.nt >= 0.15 || j.on >= 0.25 || p.sal >= 0.55) : (j.nt >= (ct ? ct.nt : (P.kiNote || 0.3)) || j.on >= (ct ? ct.on : (P.kiOn2 || 0.4))));
           // tiefer Ton unter seiner eigenen Oktave/Quinte, die auch gespielt wird: die KI muss den tiefen Ton selbst deutlich hören
-          if (okk && hasUpper && !P.noKiFund) okk = j.nt >= (P.kiFundNt || 0.45) || j.on >= (P.kiFundOn || 0.5);
+          if (okk && hasUpper && !P.noKiFund) okk = j.nt >= (ct ? ct.fNt : (P.kiFundNt || 0.45)) || j.on >= (ct ? ct.fOn : (P.kiFundOn || 0.5));
         }
         if (opt.dbgKI && p.rc) console.log('KIRC', t, 'ok', okk, 'at', p.at.toFixed(2), 't0', p.t0.toFixed(2), 'stepT', stepT.toFixed(2), 'onT', (kiOnT[t] || 0).toFixed(2), kiF.filter(function (f) { return f.t > p.t0 - 0.5 && f.t < p.at + 0.1; }).map(function (f) { return f.t.toFixed(2) + ':' + f.on[t - 21].toFixed(2); }).join(' '));
         if (opt.dbgKI && !p.rc) console.log('KIJ', t, okk ? 'ok' : 'REJ', 'nt', j ? j.nt.toFixed(2) : '-', 'on', j ? j.on.toFixed(2) : '-', 'oc', j ? j.oc.toFixed(2) : '-', 'sal', p.sal.toFixed(2));
@@ -1874,6 +1896,15 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
       step: function (now) { prevStepT = stepT; stepT = now; prevTg = stepTg; stepTg = {}; freshUntil = {}; cnt = {}; nmTrack = {}; nmList = {}; },
       learnState: function () { var o = {}; Object.keys(learned).forEach(function (m) { var x = learned[m]; o[m] = { sal: +x.sal.toFixed(3), rise: +x.rise.toFixed(2), n: x.n }; }); return o; },
       teach: function (m, sal, rise, w) { learn(m, sal, rise, w || 3); },
+      // Zusammenklang einspielen: Werte eines Tons im Akkord merken (Mittel über mehrere Akkorde)
+      teachChord: function (m, sal, nt, on) {
+        var c = chL[m] || { sal: sal, nt: nt, on: on, n: 0 }, a = 1 / (c.n + 1);
+        c.sal += (sal - c.sal) * a; c.nt += (nt - c.nt) * a; c.on += (on - c.on) * a; c.n = Math.min(20, c.n + 1); chL[m] = c;
+      },
+      chordState: function () { var o = {}; Object.keys(chL).forEach(function (m) { var x = chL[m]; o[m] = { sal: +x.sal.toFixed(3), nt: +x.nt.toFixed(3), on: +x.on.toFixed(3), n: x.n }; }); return o; },
+      // Hör-KI-Einschätzung für Ton m im Zeitfenster (Einstellen): Anschlag, Klingen, Oktav-Verdacht
+      kiProbe: function (m, t0, t1, tg) { var j = kiJudge(m, t0, t1, tg || [m]), ed = kiEdge(m, t0 - 0.03, t1); j.on = Math.max(j.on, ed.v); return j; },
+      kiCovered: function (t) { return kiEnd >= t; },
       heard: function () { return (lastPicks || []).filter(function (p) { return p.sal >= 0.5; }).map(function (p) { return p.midi; }); },
       presence: function (m, now) { var x = lastSal[m]; return x && now - x.t < 0.3 ? x.v : 0; },
       reset: function () { prevS = null; fluxHist = []; hist = {}; lastEmit = {}; cnt = {}; ringSeen = {}; resL = null; },
@@ -3914,12 +3945,17 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.2', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.3', VERSION_DATE = '31.10.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
   function saveLearn() { try { localStorage.setItem('ks-learn', JSON.stringify(Learn)); } catch (e) { /* ignorieren */ } }
   function mergeLearn(o) { if (!o) return; Object.keys(o).forEach(function (m) { if (o[m] && o[m].n) Learn[m] = o[m]; }); saveLearn(); }
+  // Zusammenklänge: wie jeder Ton im Akkord bei dir klingt (eigener Speicher, damit Einzeltöne unberührt bleiben)
+  var LearnCh = {};
+  try { LearnCh = JSON.parse(localStorage.getItem('ks-learn-ch') || '{}') || {}; } catch (e) { LearnCh = {}; }
+  function saveLearnCh() { try { localStorage.setItem('ks-learn-ch', JSON.stringify(LearnCh)); } catch (e) { /* ignorieren */ } }
+  function chordCount() { return Object.keys(LearnCh).filter(function (m) { return LearnCh[m] && LearnCh[m].n >= 1; }).length; }
   function learnedCount() { return Object.keys(Learn).filter(function (m) { return Learn[m] && Learn[m].n >= 2; }).length; }
   /* ================= Umgebung ================= */
   var ENV = {
@@ -4151,7 +4187,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   Mic.prototype.start = function (onNote, getTargets, onLevel) {
     var self = this;
     return this.open().then(function (io) {
-      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, trace: window.__tastoTrace || null, P: calP(), learned: Learn });
+      var det = PD.createDetector({ sr: io.sr, a4: S.a4, sens: S.sens, debug: window.__tastoDbg || null, trace: window.__tastoTrace || null, P: calP(), learned: Learn, chordLearned: LearnCh });
       self.det = det;
       clearInterval(self.saveT); self.saveT = setInterval(function () { if (det.learnState) mergeLearn(det.learnState()); }, 8000);
       if (kiPossible() && S.ki !== false) self.startKI(det);
@@ -4704,7 +4740,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       // Klavier einstellen: gut sichtbar, solange es noch nicht gemacht ist
       if (!S.cal && !ENV.artifact) view.appendChild(el('button', { class: 'setup-card', onclick: function () { calibrate(showLibrary); } }, [
         el('span', { class: 'setup-ic' }, [icon('target')]),
-        el('div', {}, [el('b', { text: 'Klavier einstellen' }), el('span', { text: 'Spiel ein paar Töne an – Tasto lernt dein Klavier und erkennt danach sicherer, was du spielst. Dauert etwa eine Minute.' })]),
+        el('div', {}, [el('b', { text: 'Klavier einstellen' }), el('span', { text: 'Spiel ein paar Töne und Akkorde an – Tasto lernt dein Klavier und erkennt danach sicherer, was du spielst. Dauert etwa zwei Minuten.' })]),
         icon('chevr')]));
       else if (S.cal) view.appendChild(el('div', { class: 'setup-ok' }, [icon('check'), el('span', { text: 'Klavier eingestellt' + (learnedCount() ? ' · ' + learnedCount() + ' Töne gelernt' : '') }),
         el('button', { class: 'btn sm', text: 'Neu einstellen', onclick: function () { calibrate(showLibrary); } })]));
@@ -5320,7 +5356,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       list.sort(function (a, b) { return a - b; });
       if (!list.length) return;
       var was = st.input === 'mic'; stopInput(); toggleDrawer(false);
-      calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }, { teach: list.slice(0, 30), title: 'Stück anlernen' });
+      var cc = {}; st.steps.forEach(function (s) { if (s.notes.length < 2) return; var k = s.notes.map(function (n) { return n.midi; }).sort(function (a, b) { return a - b; }).join(','); cc[k] = (cc[k] || 0) + 1; });
+      var chs = Object.keys(cc).sort(function (a, b) { return cc[b] - cc[a]; }).slice(0, 10).map(function (k) { return k.split(',').map(Number); });
+      calibrate(function () { if (was && root.contains(stage)) setInput('mic'); }, { teach: list.slice(0, 30), chords: chs, title: 'Stück anlernen' });
     }
     function toggleDiag() {
       if (!mic.rec) {
@@ -5776,7 +5814,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   function calibrate(after, opts) {
     opts = opts || {};
     var mic = new Mic(), det = null, io = null, timer = null, stage = null, rec = { notes: [], log: [] }, closed = false, recording = false;
-    var TEACH = !!opts.teach;
+    var TEACH = !!opts.teach, ONLYCH = !!opts.chordsOnly;
+    // Zusammenklänge: Intervalle und Akkorde in beiden Händen (oder die Akkorde des Stücks beim Anlernen)
+    var CHORDS = opts.chords || [[57, 64], [60, 64], [60, 64, 67], [57, 60, 64], [48, 60], [48, 55], [43, 50], [48, 64, 67], [45, 57, 64], [55, 59, 62, 67]];
     var NOTES = TEACH ? opts.teach.map(function (m) { return [m, PC.midiLabel(m), 'das ' + PC.midiLabel(m)]; }) : [[60, 'C', 'das mittlere C'], [64, 'E', 'das E über dem mittleren C'], [67, 'G', 'das G über dem mittleren C'], [72, 'C', 'das C eine Oktave höher'],
       [76, 'E', 'das E eine Oktave höher'], [55, 'G', 'das G unter dem mittleren C'], [48, 'C', 'das C eine Oktave tiefer'], [43, 'G', 'das tiefe G (linke Hand)']];
     var title, big, sub, meterI, list, acts, closeFn;
@@ -5787,8 +5827,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       meterI = el('i'); list = el('div', { class: 'cal-list' }); acts = el('div', { class: 'acts' });
       box.appendChild(title); box.appendChild(sub); box.appendChild(big);
       box.appendChild(el('div', { class: 'meter big' }, [meterI])); box.appendChild(list); box.appendChild(acts);
-      sub.textContent = TEACH ? 'Spiel nacheinander jeden Ton dieses Stücks einmal an (' + NOTES.length + ' Töne). Tasto merkt sich, wie jeder Ton bei dir klingt, und erkennt ihn danach sicherer.'
-        : 'Tasto hört sich dein Klavier einmal genau an: Stimmung, Lautstärke und wie jeder Ton bei dir klingt. Das dauert etwa eine Minute. Leg das iPhone so hin, wie du später übst.';
+      sub.textContent = ONLYCH ? 'Spiel ' + CHORDS.length + ' Zusammenklänge – Intervalle und Akkorde in beiden Händen. Tasto prüft bei jedem, ob alle Töne sauber ankommen, und merkt sich, wie sie bei dir zusammen klingen. Leg das iPhone so hin, wie du später übst.'
+        : TEACH ? 'Spiel nacheinander jeden Ton dieses Stücks einmal an (' + NOTES.length + ' Töne)' + (CHORDS.length ? ', danach die ' + CHORDS.length + ' Akkorde daraus' : '') + '. Tasto merkt sich, wie alles bei dir klingt, und erkennt es danach sicherer.'
+        : 'Tasto hört sich dein Klavier einmal genau an: Stimmung, Lautstärke, jeder Ton einzeln und danach Zusammenklänge und Akkorde. Das dauert etwa zwei Minuten. Leg das iPhone so hin, wie du später übst.';
       setActs([['Abbrechen', close], ['Los geht’s', start, true]]);
     }, function () { closed = true; clearInterval(timer); mic.stop(); if (after) after(); });
     function setActs(a) { clear(acts); a.forEach(function (x) { acts.appendChild(el('button', { class: 'btn' + (x[2] ? ' primary' : ''), text: x[0], onclick: x[1] })); }); }
@@ -5815,7 +5856,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       }, 24);
     }
     function silence() {
-      var dur = TEACH ? 1.6 : 3;
+      var dur = TEACH || ONLYCH ? 1.6 : 3;
       big.textContent = 'Ruhe bitte'; sub.textContent = 'Spiel kurz nichts – Tasto misst das Grundrauschen.';
       var t0 = null, dbs = [], floors = [];
       return function (now, db) {
@@ -5828,7 +5869,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         dbs.sort(function (a, b) { return a - b; }); floors.sort(function (a, b) { return a - b; });
         rec.noise = dbs[dbs.length >> 1]; rec.floor = floors[floors.length >> 1];
         if (!TEACH) row('Grundrauschen', rec.noise < -45, Math.round(rec.noise) + ' dB' + (rec.noise >= -45 ? ' – ziemlich laut, ist es ruhig im Raum?' : ''));
-        return TEACH ? notes(0) : tuning();
+        return ONLYCH ? chords(0, 0) : TEACH ? notes(0) : tuning();
       };
     }
     function waitOnset() {
@@ -5856,7 +5897,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     }
     function noteLabel(n) { return n[1] + ' – ' + n[2]; }
     function notes(i) {
-      if (i >= NOTES.length) return TEACH ? 'done' : chord();
+      if (i >= NOTES.length) return CHORDS.length ? chords(0, 0) : 'done';
       var n = NOTES[i];
       big.textContent = PC.midiLabel(n[0]); sub.textContent = 'Spiel ' + n[2] + ' (' + (i + 1) + ' von ' + NOTES.length + ').';
       var onset = waitOnset(), tOn = null, t0 = null, pre = null, best = { sal: 0, rise: 0 }, heard = {};
@@ -5881,30 +5922,89 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       };
     }
     function pause(then) { var t0 = null; return function (now) { if (t0 === null) t0 = now; return now - t0 > 0.6 ? then() : null; }; }
-    function chord() {
-      big.textContent = 'C + E'; sub.textContent = 'Spiel das mittlere C und das E darüber gleichzeitig.';
-      var onset = waitOnset(), tOn = null, t0 = null, b1 = 0, b2 = 0;
+    // Zusammenklänge: alle Töne gleichzeitig; DSP und Hör-KI prüfen jeden Ton, Tasto merkt sich die Werte je Ton im Akkord
+    var kdet = null, chRes = [];
+    function where(m) {
+      var o = Math.floor((m - 60) / 12), nm = PC.midiLabel(m).replace(/\d+$/, '');
+      if (m === 60) return 'mittleres C';
+      if (o === 0) return nm + ' über dem mittleren C';
+      if (o === -1) return nm + ' unter dem mittleren C';
+      if (o === 1) return nm + ' eine Oktave höher';
+      if (o === -2) return 'tiefes ' + nm + ' (linke Hand)';
+      if (o <= -3) return 'sehr tiefes ' + nm;
+      return 'hohes ' + nm;
+    }
+    // kleine Klaviatur: welche Tasten zusammen (mittleres C markiert)
+    var kbBox = null;
+    function showKb(ch) {
+      if (!kbBox) { kbBox = el('div', { class: 'mini-kb', 'aria-hidden': 'true' }); big.parentNode.insertBefore(kbBox, big.nextSibling); }
+      clear(kbBox);
+      var lo = Math.min(Math.floor(ch[0] / 12) * 12, 48), hi = Math.max(Math.floor(ch[ch.length - 1] / 12) * 12 + 11, 71), whites = [];
+      for (var m = lo; m <= hi; m++) if ([1, 3, 6, 8, 10].indexOf(m % 12) < 0) whites.push(m);
+      var wW = 100 / whites.length;
+      whites.forEach(function (m, k) { kbBox.appendChild(el('i', { class: 'w' + (ch.indexOf(m) >= 0 ? ' on' : '') + (m === 60 ? ' c4' : ''), style: 'left:' + (k * wW) + '%;width:' + wW + '%' })); });
+      for (m = lo; m <= hi; m++) if ([1, 3, 6, 8, 10].indexOf(m % 12) >= 0) { var k2 = whites.indexOf(m - 1); kbBox.appendChild(el('i', { class: 'b' + (ch.indexOf(m) >= 0 ? ' on' : ''), style: 'left:' + ((k2 + 1) * wW - wW * 0.3) + '%;width:' + (wW * 0.6) + '%' })); }
+    }
+    function chords(i, attempt) {
+      if (i >= CHORDS.length) return 'done';
+      if (!kdet) {
+        kdet = PD.createDetector({ sr: io.sr, a4: rec.a4 || S.a4, sens: 0, P: calP(), learned: Learn, chordLearned: LearnCh });
+        if (kiPossible() && S.ki !== false) mic.startKI(kdet);
+        setActs([['Abbrechen', closeFn], ['Rest überspringen', function () { clearInterval(timer); finish(); }]]);
+      }
+      var ch = CHORDS[i].slice().sort(function (a, b) { return a - b; }), lbl = ch.map(PC.midiLabel).join(' + ');
+      big.textContent = lbl; showKb(ch);
+      sub.textContent = (attempt ? 'Nochmal bitte, alle Töne gleich kräftig: ' : 'Zusammen anschlagen (' + (i + 1) + ' von ' + CHORDS.length + '): ') + ch.map(where).join(' + ') + '.';
+      var onset = waitOnset(), tOn = null, t0 = null, sal = {}, wait0 = null;
+      ch.forEach(function (m) { sal[m] = 0; });
       return function (now, db) {
         if (t0 === null) t0 = now;
-        if (tOn === null) { if (onset(now, db)) tOn = now; else if (now - t0 > 10) { row('Zweiklang', false, 'übersprungen'); return 'done'; } return null; }
-        b1 = Math.max(b1, det.probe(io, 60).sal); b2 = Math.max(b2, det.probe(io, 64).sal);
-        if (now - tOn < 0.9) return null;
-        rec.chord = { c: +b1.toFixed(2), e: +b2.toFixed(2) };
-        row('Zweiklang C + E', b1 >= 0.3 && b2 >= 0.3, 'C ' + Math.round(b1 * 100) + ' %, E ' + Math.round(b2 * 100) + ' %');
-        return 'done';
+        if (tOn === null) {
+          if (onset(now, db)) tOn = now;
+          else if (now - t0 > 12) { row(lbl, false, 'nichts gehört – übersprungen'); chRes.push({ ch: ch, skipped: true }); return pause(function () { return chords(i + 1, 0); }); }
+          return null;
+        }
+        if (now - tOn < 1.1) { ch.forEach(function (m) { sal[m] = Math.max(sal[m], kdet.probe(io, m).sal); }); return null; }
+        // auf die Hör-KI warten (rechnet mit etwas Verzögerung)
+        var useKI = kdet.kiActive(now);
+        if (useKI && !kdet.kiCovered(tOn + 0.75)) { if (wait0 === null) wait0 = now; if (now - wait0 < 2) return null; }
+        useKI = useKI && kdet.kiCovered(tOn + 0.5);
+        var res = ch.map(function (m) {
+          var j = useKI ? kdet.kiProbe(m, tOn - 0.08, tOn + 0.75, ch) : null;
+          var ok = j ? (j.nt >= 0.3 || j.on >= 0.4) && !(j.oc >= 0.4 && j.nt < j.oc * 0.55) : sal[m] >= 0.3;
+          return { m: m, sal: sal[m], nt: j ? j.nt : null, on: j ? j.on : null, ok: ok };
+        });
+        var any = res.some(function (r) { return r.ok || r.sal >= 0.3; });
+        // nur lernen, wenn wirklich gespielt wurde (sonst lernt Tasto Stille)
+        if (any) res.forEach(function (r) { if (r.nt != null) kdet.teachChord(r.m, r.sal, r.nt, r.on); else kdet.teachChord(r.m, r.sal, 0, 0); });
+        var bad = res.filter(function (r) { return !r.ok; });
+        if (bad.length && attempt < 1) return pause(function () { return chords(i, attempt + 1); });
+        chRes.push({ ch: ch, bad: bad.map(function (r) { return r.m; }), res: res.map(function (r) { return { m: r.m, sal: +r.sal.toFixed(2), nt: r.nt == null ? null : +r.nt.toFixed(2), on: r.on == null ? null : +r.on.toFixed(2) }; }) });
+        row(lbl, !bad.length, !bad.length ? 'alle Töne klar' + (useKI ? ' (mit Hör-KI geprüft)' : '') : bad.map(function (r) { return PC.midiLabel(r.m); }).join(', ') + ' kam im Zusammenklang schwach an – Tasto hat sich das gemerkt');
+        return pause(function () { return chords(i + 1, 0); });
       };
     }
     function finish() {
       saveLearn();
+      if (kdet && kdet.chordState) { var cs = kdet.chordState(); Object.keys(cs).forEach(function (m) { LearnCh[m] = cs[m]; }); saveLearnCh(); }
+      rec.chords = chRes;
+      var chPlayed = chRes.filter(function (c) { return !c.skipped; }), chGood = chPlayed.filter(function (c) { return !c.bad.length; }).length;
+      var chText = chPlayed.length ? ' Zusammenklänge: ' + chGood + ' von ' + chPlayed.length + ' sauber' + (chGood < chPlayed.length ? ' – bei den anderen achtet Tasto jetzt genau auf die schwächeren Töne.' : '.') : '';
+      if (ONLYCH) {
+        big.textContent = chGood + ' von ' + CHORDS.length;
+        sub.textContent = chPlayed.length ? 'Gespeichert.' + chText : 'Keine Zusammenklänge gehört.';
+        setActs([['Fertig', closeFn, true]]);
+        return;
+      }
       var played = rec.notes.filter(function (n) { return !n.skipped; });
       if (TEACH) {
         var good = played.filter(function (n) { return n.sal >= 0.3; }).length;
         big.textContent = played.length + ' von ' + NOTES.length;
-        sub.textContent = 'Angelernt und gespeichert. ' + (good < played.length ? (played.length - good) + ' Töne kamen schwach an – Tasto achtet bei ihnen jetzt besonders genau hin.' : 'Alle Töne kamen klar an.');
+        sub.textContent = 'Angelernt und gespeichert. ' + (good < played.length ? (played.length - good) + ' Töne kamen schwach an – Tasto achtet bei ihnen jetzt besonders genau hin.' : 'Alle Töne kamen klar an.') + chText;
         setActs([['Fertig', closeFn, true]]);
         return;
       }
-      var sals = played.map(function (n) { return n.sal; }).concat(rec.chord ? [rec.chord.c, rec.chord.e] : []).sort(function (a, b) { return a - b; });
+      var sals = played.map(function (n) { return n.sal; }).sort(function (a, b) { return a - b; });
       var rises = played.map(function (n) { return n.rise; }).sort(function (a, b) { return a - b; });
       var q = function (a, f) { return a.length ? a[Math.floor((a.length - 1) * f)] : null; };
       var cal = {
@@ -5916,7 +6016,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       };
       S.cal = cal; S.a4 = cal.a4; S.sens = 0; saveSettings();
       big.textContent = cal.ok + ' von ' + NOTES.length;
-      sub.textContent = 'Eingestellt und gespeichert. Tasto ist jetzt auf dein Klavier und deinen Raum eingestellt' + (cal.ok < NOTES.length - 1 ? '. Einige Töne kamen schwach an – leg das iPhone näher ans Klavier oder dreh das Piano etwas lauter und miss nochmal ein.' : '.');
+      sub.textContent = 'Eingestellt und gespeichert. Tasto ist jetzt auf dein Klavier und deinen Raum eingestellt' + (cal.ok < NOTES.length - 1 ? '. Einige Töne kamen schwach an – leg das iPhone näher ans Klavier oder dreh das Piano etwas lauter und miss nochmal ein.' : '.') + chText;
       var buttons = [['Fertig', closeFn, true]];
       if (recording) buttons.unshift(['Messdaten speichern', function () {
         mic.stopRec().then(function (r) {
@@ -5995,11 +6095,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         slider('Empfindlichkeit', 'sens', -10, 15, 1, function (v) { return (v > 0 ? '+' : '') + v + ' dB'; }),
         slider('Stimmung A4', 'a4', 430, 450, 1, function (v) { return v + ' Hz'; }),
         el('button', { class: 'btn primary', onclick: function () { close(); calibrate(); } }, [icon('target'), S.cal ? 'Klavier neu einstellen' : 'Klavier einstellen']),
+        el('button', { class: 'btn', onclick: function () { close(); calibrate(null, { chordsOnly: true, title: 'Zusammenklänge einspielen' }); } }, [icon('keys'), 'Nur Zusammenklänge & Akkorde einspielen']),
         S.cal ? el('p', { class: 'hint', text: 'Eingestellt am ' + new Date(S.cal.date).toLocaleDateString('de-DE') + ': ' + S.cal.ok + ' von ' + S.cal.total + ' Tönen klar, Stimmung A = ' + S.cal.a4 + ' Hz.' }) : null,
         kiPossible() ? check('Hör-KI: neuronales Netz erkennt jeden Anschlag (empfohlen)', 'ki', null, true) : null,
         kiPossible() ? el('p', { class: 'hint', text: KI.failed ? 'Hör-KI: konnte auf diesem Gerät nicht starten – Tasto nutzt die normale Erkennung.' : KI.bpP ? 'Hör-KI: geladen' + (window.__kiMs ? ' (' + Math.round(window.__kiMs) + ' ms pro Auswertung)' : '') + '.' : 'Hör-KI: startet, sobald das Mikrofon an ist.' }) : null,
-        el('p', { class: 'hint', text: learnedCount() ? 'Tasto hat sich ' + learnedCount() + ' Töne deines Klaviers gemerkt und lernt beim Üben weiter.' : 'Tasto lernt beim Einstellen und beim Üben, wie deine Töne klingen.' }),
-        learnedCount() ? el('button', { class: 'btn sm', onclick: function () { Learn = {}; saveLearn(); toast('Gelerntes gelöscht'); close(); } }, ['Gelerntes zurücksetzen']) : null,
+        el('p', { class: 'hint', text: (learnedCount() ? 'Tasto hat sich ' + learnedCount() + ' Töne deines Klaviers gemerkt' + (chordCount() ? ' (' + chordCount() + ' davon auch im Zusammenklang)' : '') + ' und lernt beim Üben weiter.' : 'Tasto lernt beim Einstellen und beim Üben, wie deine Töne klingen.') }),
+        learnedCount() || chordCount() ? el('button', { class: 'btn sm', onclick: function () { Learn = {}; saveLearn(); LearnCh = {}; saveLearnCh(); toast('Gelerntes gelöscht'); close(); } }, ['Gelerntes zurücksetzen']) : null,
         el('button', { class: 'btn', onclick: function () { close(); micTest(); } }, [icon('mic'), 'Mikrofon testen']),
         el('p', { class: 'hint', text: 'Stell das Handy neben das Klavier, nicht darauf. Im Modus „Mikro“ sind Tastenton, Begleitung und Metronom stumm, damit Tasto nur dich hört.' })
       ]));
