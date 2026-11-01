@@ -431,6 +431,65 @@ input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px;
 /* Übungsbühne: Kopfzeile wie die Karten */
 .st-hud { background: rgba(7, 11, 20, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
+/* ===== Noten lesen lernen ===== */
+.read-card { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 14px; margin: 4px 0 14px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface-solid)), var(--surface-solid)); color: inherit; font: inherit; cursor: pointer; box-shadow: var(--shadow); }
+.read-card .rc-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); }
+.read-card .rc-t { display: grid; gap: 4px; min-width: 0; }
+.read-card .k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.read-card b { font-size: 16px; }
+.read-hero { display: grid; gap: 14px; margin: 6px 0 14px; }
+.read-hero p { margin: 0; color: var(--muted); line-height: 1.5; }
+.read-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.read-sum div { background: var(--surface2); border-radius: 14px; padding: 10px; text-align: center; }
+.read-sum b { display: block; font: 700 20px var(--f-ui); font-variant-numeric: tabular-nums; }
+.read-sum span { font-size: 12px; color: var(--muted); }
+.path-lv .pc.st { color: var(--accent); letter-spacing: 1px; }
+.path-lv.locked { opacity: .45; cursor: default; }
+.read-run { display: flex; flex-direction: column; gap: 10px; }
+.rd-top { display: flex; align-items: center; gap: 10px; }
+.rd-dots { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.rd-dots i { width: 14px; height: 6px; border-radius: 3px; background: var(--surface2); }
+.rd-dots i.cur { background: var(--hand-r); }
+.rd-dots i.ok { background: var(--ok); }
+.rd-dots i.bad { background: var(--bad); }
+.rd-time { font: 600 13px var(--f-mono); color: var(--muted); min-width: 52px; text-align: right; }
+.rd-paper { flex: 1 1 auto; max-height: 380px; overflow: hidden; background: #fbf8f1; color: #141821; border-radius: 18px; min-height: 170px; display: grid; place-items: center; padding: 14px 4px; box-shadow: var(--shadow); }
+.rd-paper svg { width: min(100%, 300px); height: auto; }
+.rd-paper.done { background: var(--surface-solid); color: var(--ink); place-items: stretch; padding: 16px; }
+.rd-res { display: grid; gap: 12px; text-align: center; }
+.rd-res h2 { margin: 0; font-size: 20px; text-wrap: balance; }
+.rd-res .lv-stars { font-size: 30px; color: var(--accent); letter-spacing: 4px; }
+.rd-res .acts { display: flex; gap: 8px; justify-content: center; }
+.rd-fb { min-height: 24px; text-align: center; font-weight: 600; color: var(--muted); }
+.rd-fb.ok { color: var(--ok); }
+.rd-fb.bad { color: var(--bad); }
+.rd-fb.help { color: var(--accent); }
+.rd-tools { justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rd-kb { flex: 0 0 auto; }
+.rd-kb .kb { height: clamp(130px, 21vh, 180px); }
+.rd-kb .kbnav { display: none; }
+.read-run .rd-paper.done { max-height: none; overflow: auto; }
+
+/* ===== Üben in Noten-Ansicht (Standard) ===== */
+.st-view, .st-help { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .06); color: #c7d3e4; font: 700 12.5px/1 var(--f-ui); white-space: nowrap; }
+.st-view svg { width: 16px; height: 16px; }
+.st-view.on { background: #fbf9f4; color: #141821; border-color: transparent; }
+.st-help.on { border-color: rgba(255, 181, 71, .5); color: #ffc56b; }
+.stage.reading .st-score { flex: 1 1 auto; border-bottom: 0; }
+.stage.reading .st-fall { flex: 0 0 76px; min-height: 76px; background: #0b1120; }
+.stage.reading .falls-cv { visibility: hidden; }
+.stage.reading .st-pill { top: 8px; }
+.stage.reading .st-wrong { top: 46px; }
+.stage.nohelp .st-pill em { color: #9aa7bd; }
+@media (max-width: 420px) { .st-view span, .st-help span { font-size: 11.5px; } .st-view, .st-help { padding: 0 8px; } }
+@media (max-height: 500px) {
+  .stage.reading .st-fall { flex-basis: 46px; min-height: 46px; }
+  .stage.reading .st-pill { top: 5px; }
+  .stage.reading .st-wrong { top: 5px; left: auto; right: 10px; transform: none; }
+  .stage.reading .st-heard { bottom: 6px; }
+  .stage.reading .kb { height: clamp(96px, 24vh, 150px); }
+}
+
 </style>
 <div id="app"></div>
 <script>
@@ -1224,7 +1283,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         P.push(s === 'R' ? trebleClef(x0 + 1.4, yOf(st.clefD), ink) : bassClef(x0 + 1.5, yOf(st.clefD), ink));
         var arr = sig > 0 ? st.sharpsD : st.flatsD;
         for (var i = 0; i < Math.abs(sig); i++) P.push(accGlyph(sig > 0 ? 1 : -1, x0 + 3.9 + i * 1.0, yOf(arr[i]), ink));
-        if (si === 0) {
+        if (si === 0 && !opt.noMeter) {
           var tx = x0 + 3.7 + keyW + 1.0;
           var fs = 'font-family="Georgia,\'Times New Roman\',serif" font-weight="700" font-size="2.7" text-anchor="middle" fill="' + ink + '"';
           P.push('<text x="' + r2(tx) + '" y="' + r2(ty[s] + 1.95) + '" ' + fs + '>' + score.meter.num + '</text>');
@@ -3591,6 +3650,78 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
 });
 
 ;
+/* Tasto – Noten lesen lernen: Stufen, Aufgaben, Bewertung (ohne Oberfläche, damit testbar) */
+(function (root, f) { if (typeof module === 'object' && module.exports) module.exports = f(); else root.PR = f(); })(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  var SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, DE = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'H' };
+  // Ton: Stammton, Oktave, Vorzeichen (−1/0/1)
+  function N(s, o, a) { return { s: s, o: o, a: a || 0, midi: 12 * (o + 1) + SEMI[s] + (a || 0) }; }
+  function range(from, to) { // Stammtöne von–bis (z. B. 'C4', 'G5')
+    var L = 'CDEFGAB', out = [], s = L.indexOf(from[0]), o = +from.slice(1), ts = L.indexOf(to[0]), to2 = +to.slice(1);
+    while (o < to2 || (o === to2 && s <= ts)) { out.push(N(L[s], o)); s++; if (s > 6) { s = 0; o++; } }
+    return out;
+  }
+  function name(n) { var b = DE[n.s]; if (n.a === 1) b = n.s === 'B' ? 'His' : n.s + 'is'; if (n.a === -1) b = n.s === 'B' ? 'B' : n.s === 'E' ? 'Es' : n.s === 'A' ? 'As' : n.s + 'es'; return b + n.o; }
+  function abcNote(n, keyAlt) {
+    var acc = n.a === (keyAlt[n.s] || 0) ? '' : n.a === 1 ? '^' : n.a === -1 ? '_' : '=';
+    var l = n.s; if (n.o >= 5) { l = l.toLowerCase(); for (var i = 5; i < n.o; i++) l += "'"; } else for (var j = 4; j > n.o; j--) l += ',';
+    return acc + l;
+  }
+  // Stufen: jede bringt wenige neue Töne dazu – vom Violinschlüssel über den Bassschlüssel bis zu Akkorden und Tonarten
+  var T = function (a, b) { return range(a, b); };
+  var LEVELS = [
+    { id: 'v1', title: 'Violinschlüssel: C bis G', sub: 'Die ersten fünf Töne der rechten Hand', clef: 'R', pool: T('C4', 'G4') },
+    { id: 'v2', title: 'Violinschlüssel: C bis C', sub: 'Eine ganze Oktave ab dem mittleren C', clef: 'R', pool: T('C4', 'C5') },
+    { id: 'v3', title: 'Violinschlüssel: das ganze System', sub: 'Bis zum G oben', clef: 'R', pool: T('C4', 'G5') },
+    { id: 'b1', title: 'Bassschlüssel: C bis G', sub: 'Die ersten Töne der linken Hand', clef: 'L', pool: T('C3', 'G3') },
+    { id: 'b2', title: 'Bassschlüssel: das ganze System', sub: 'Vom tiefen G bis zum mittleren C', clef: 'L', pool: T('G2', 'C4') },
+    { id: 'm1', title: 'Beide Schlüssel gemischt', sub: 'Mal oben, mal unten – wie im echten Stück', clef: 'X', pool: T('G2', 'G5') },
+    { id: 'h1', title: 'Hilfslinien', sub: 'Töne über und unter den Systemen', clef: 'X', pool: [N('A', 3), N('B', 3), N('C', 4), N('A', 5), N('B', 5), N('C', 6), N('E', 2), N('F', 2), N('D', 2), N('C', 2), N('D', 4), N('E', 4)], clefOf: function (n) { return n.o >= 5 || (n.o === 3 && n.s >= 'A') || (n.o === 4 && n.s === 'C') ? 'R' : 'L'; } },
+    { id: 'a1', title: 'Vorzeichen ♯ und ♭', sub: 'Erhöht und erniedrigt – die schwarzen Tasten', clef: 'X', pool: [N('F', 4, 1), N('C', 5, 1), N('G', 4, 1), N('B', 4, -1), N('E', 4, -1), N('A', 4, -1), N('F', 3, 1), N('B', 2, -1), N('C', 4, 1), N('E', 5, -1)] },
+    { id: 'i1', title: 'Zwei Töne zugleich', sub: 'Terzen, Quinten, Sexten in der rechten Hand', clef: 'R', chords: [['C4', 'E4'], ['D4', 'F4'], ['E4', 'G4'], ['C4', 'G4'], ['D4', 'A4'], ['E4', 'C5'], ['F4', 'A4'], ['G4', 'B4'], ['A4', 'C5'], ['G4', 'D5']] },
+    { id: 'c1', title: 'Akkorde', sub: 'Dreiklänge rechts, Grundtöne links', clef: 'X', chords: [['C4', 'E4', 'G4'], ['F4', 'A4', 'C5'], ['G4', 'B4', 'D5'], ['A4', 'C5', 'E5'], ['D4', 'F4', 'A4'], ['E4', 'G4', 'B4'], ['C3', 'G3'], ['F2', 'C3'], ['G2', 'D3'], ['A2', 'E3']] },
+    { id: 'k1', title: 'Tonart G-Dur (ein ♯)', sub: 'Jedes F ist ein Fis – auch ohne Zeichen an der Note', clef: 'R', key: 1, pool: T('D4', 'G5').map(function (n) { return n.s === 'F' ? N('F', n.o, 1) : n; }) },
+    { id: 'k2', title: 'Tonart F-Dur (ein ♭)', sub: 'Jedes H ist ein B', clef: 'X', key: -1, pool: T('F2', 'C5').map(function (n) { return n.s === 'B' ? N('B', n.o, -1) : n; }) }
+  ];
+  LEVELS.forEach(function (l, i) { l.n = i + 1; });
+  function clefFor(l, notes) { if (l.clef !== 'X') return l.clef; var lo = Math.min.apply(null, notes.map(function (n) { return n.midi; })); return lo >= 60 ? 'R' : lo < 57 ? 'L' : (Math.random() < 0.5 ? 'R' : 'L'); }
+  function parse(t) { return N(t[0], +t.slice(1)); }
+  // eine Runde: COUNT Aufgaben, nie zweimal dieselbe hintereinander
+  var COUNT = 15;
+  function round(l, rnd) {
+    rnd = rnd || Math.random;
+    var out = [], last = null;
+    for (var i = 0; i < COUNT; i++) {
+      var notes, tries = 0;
+      do {
+        notes = l.chords ? l.chords[Math.floor(rnd() * l.chords.length)].map(parse) : [l.pool[Math.floor(rnd() * l.pool.length)]];
+        tries++;
+      } while (last && notes.map(name).join() === last && tries < 8);
+      last = notes.map(name).join();
+      out.push(card(l, notes));
+    }
+    return out;
+  }
+  function card(l, notes) {
+    var clef = l.clefOf ? l.clefOf(notes[0]) : clefFor(l, notes);
+    var keyAlt = {}; if (l.key === 1) keyAlt.F = 1; if (l.key === -1) keyAlt.B = -1;
+    var body = notes.length > 1 ? '[' + notes.map(function (n) { return abcNote(n, keyAlt); }).join('') + ']4' : abcNote(notes[0], keyAlt) + '4';
+    var abc = 'X:1\nM:4/4\nL:1/4\nK:' + (l.key === 1 ? 'G' : l.key === -1 ? 'F' : 'C') + '\nV:' + clef + ' clef=' + (clef === 'R' ? 'treble' : 'bass') + '\n' + body + ' |]';
+    return { notes: notes, midis: notes.map(function (n) { return n.midi; }), names: notes.map(name), clef: clef, abc: abc };
+  }
+  // Bewertung einer Runde: Trefferquote und Lesetempo → Sterne (5 = alles sofort richtig)
+  function grade(res) {
+    var n = res.length, ok = res.filter(function (r) { return !r.wrong; }).length, acc = n ? Math.round(100 * ok / n) : 0;
+    var ts = res.map(function (r) { return r.ms; }).sort(function (a, b) { return a - b; }), med = ts.length ? ts[ts.length >> 1] / 1000 : 0;
+    var stars = acc >= 100 && med <= 2 ? 5 : acc >= 95 && med <= 3 ? 4 : acc >= 90 ? 3 : acc >= 75 ? 2 : 1;
+    return { acc: acc, sec: Math.round(med * 10) / 10, stars: stars, pass: stars >= 3 };
+  }
+  // MIDI-Nummer → deutscher Name (schwarze Tasten als Kreuz-Name, z. B. Fis4)
+  function label(m) { var o = Math.floor(m / 12) - 1, pc = m % 12, w = [['C', 0], ['C', 1], ['D', 0], ['E', -1], ['E', 0], ['F', 0], ['F', 1], ['G', 0], ['G', 1], ['A', 0], ['B', -1], ['B', 0]][pc]; return name({ s: w[0], o: o, a: w[1] }); }
+  return { label: label, LEVELS: LEVELS, round: round, grade: grade, name: name, COUNT: COUNT };
+});
+
+;
 /* Tasto – Wasserfall: fallende Noten, exakt über den Tasten, mit Leuchten und Funken */
 (function (root) {
   'use strict';
@@ -4227,12 +4358,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   }
 
   /* ================= Einstellungen ================= */
-  var S = { a4: 440, labels: 'c', tapSound: true, vol: 0.85, sens: 0, clickVol: 0.6, kbSize: 'm', pps: 150, accomp: true, trainer: true, apiKey: '', apiModel: 'claude-sonnet-5-5', focus: false, view: 'notes', introSeen: false };
+  var S = { a4: 440, labels: 'c', tapSound: true, vol: 0.85, sens: 0, clickVol: 0.6, kbSize: 'm', pps: 150, accomp: true, trainer: true, apiKey: '', apiModel: 'claude-sonnet-5-5', focus: false, view: 'notes', introSeen: false, strict: 'normal' };
   try { Object.assign(S, JSON.parse(localStorage.getItem('ks-settings') || '{}')); } catch (e) { /* kein Speicher */ }
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.7', VERSION_DATE = '31.10.2026';
+  var VERSION = '6.8', VERSION_DATE = '01.11.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -4682,8 +4813,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     if (!this.score) return;
     var w = this.pane.clientWidth; if (!w) return;
     this.lastW = w;
-    var inner = Math.max(240, w - 8), ss = inner < 430 ? 7.2 : inner < 640 ? 8 : inner < 900 ? 9 : 10;
+    var inner = Math.max(240, w - 8), ss = this.big ? (inner < 430 ? 8.6 : inner < 640 ? 9.5 : inner < 900 ? 10.5 : 11.5) : inner < 430 ? 7.2 : inner < 640 ? 8 : inner < 900 ? 9 : 10;
     if (this.fitH && this.pane.clientHeight) ss = Math.min(ss, Math.max(4.5, this.pane.clientHeight / 21));
+    if (this.big && this.pane.clientHeight) ss = Math.min(ss, Math.max(5.2, (this.pane.clientHeight - 6) / 19.5));
     this.layout = PE.engrave(this.score, { width: inner, ss: ss });
     this.ss = ss;
     this.wrap.innerHTML = this.layout.svg;
@@ -5039,6 +5171,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         el('button', { class: 'btn sm', text: 'Neu einstellen', onclick: function () { calibrate(showLibrary); } })]));
       var resume = el('div');
       view.appendChild(resume);
+      view.appendChild(readingCard());
       view.appendChild(el('div', { class: 'lib-head' }, [
         el('h2', { text: 'Deine Stücke' }),
         el('button', { class: 'btn primary', onclick: function () { newPiece(); } }, [icon('plus'), 'Neues Stück'])
@@ -5068,7 +5201,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           var chips = el('div', { class: 'chips' });
           if (!hasNotes) chips.appendChild(el('span', { class: 'chip warn', text: 'Noten fehlen' }));
           var lwBar = null;
-          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig'), { hands: S.pathMode === 'thorough' }), pd = PL.count(pth, p.path.done); if (pd) { var pts = 0; pth.forEach(function (l) { pts += (p.path.stars && p.path.stars[l.id]) || (p.path.done[l.id] >= l.need ? 3 : 0); }); chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: (pd >= pth.length ? 'Lernweg geschafft' : 'Lernweg ' + pd + '/' + pth.length) + ' · ★ ' + pts })); lwBar = el('div', { class: 'pbar-lw' }, [el('i', { style: 'width:' + Math.round(100 * pd / pth.length) + '%' })]); } }
+          if (hasNotes && p.path && p.path.done) { var pth = PL.build(PA.arrange(parsed.score, 'orig'), { hands: S.pathMode !== 'fast' }), pd = PL.count(pth, p.path.done); if (pd) { var pts = 0; pth.forEach(function (l) { pts += (p.path.stars && p.path.stars[l.id]) || (p.path.done[l.id] >= l.need ? 3 : 0); }); chips.appendChild(el('span', { class: 'chip ' + (pd >= pth.length ? 'ok' : ''), text: (pd >= pth.length ? 'Lernweg geschafft' : 'Lernweg ' + pd + '/' + pth.length) + ' · ★ ' + pts })); lwBar = el('div', { class: 'pbar-lw' }, [el('i', { style: 'width:' + Math.round(100 * pd / pth.length) + '%' })]); } }
           if (p.stats && p.stats.best != null) chips.appendChild(el('span', { class: 'chip ' + (p.stats.best >= 90 ? 'ok' : ''), text: 'Bestwert ' + p.stats.best + ' %' }));
           if (p.stats && p.stats.sec >= 30) chips.appendChild(el('span', { class: 'chip', text: fmtMin(p.stats.sec) }));
           if (hasNotes && !(p.stats && p.stats.sec >= 30)) chips.appendChild(el('span', { class: 'chip ok', text: 'Neu' }));
@@ -5085,7 +5218,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       });
       if (!S.introSeen) setTimeout(showIntro, 300);
       else if (!S.cal && !setupAsked) { setupAsked = true; setTimeout(setupPrompt, 350); }
-      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Neue Version ' + VERSION + ' ist geladen', 3500); }, 400);
+      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Version ' + VERSION + ': Noten lesen lernen (neu oben) und Üben mit Noten statt Balken', 5000); }, 400);
       if (S.lastVersion !== VERSION) { S.lastVersion = VERSION; saveSettings(); }
     });
   }
@@ -5108,7 +5241,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           .then(function (sc) { var c = Object.assign({}, p); c.scans = sc; return c; });
       }));
     }).then(function (arr) {
-      var json = JSON.stringify({ app: 'tasto', v: 1, date: new Date().toISOString(), days: Days, pieces: arr });
+      var json = JSON.stringify({ app: 'tasto', v: 1, date: new Date().toISOString(), days: Days, read: Read, pieces: arr });
       return saveFile('Tasto-Sicherung-' + dayKey() + '.json', json, 'application/json');
     }).then(function () { toast('Sicherung bereit'); }).catch(function (e) {
       if (e && (e.code === 'declined' || e.name === 'AbortError')) return;
@@ -5128,6 +5261,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
           chain = chain.then(function () { n++; return Store.put(p); });
         });
         if (data.days) Object.keys(data.days).forEach(function (k) { Days[k] = Math.max(Days[k] || 0, data.days[k] || 0); });
+        if (data.read && data.read.lv) { Object.keys(data.read.lv).forEach(function (k) { var a = Read.lv[k], b = data.read.lv[k]; if (!a || b.stars > a.stars) Read.lv[k] = b; }); if (data.read.log && Read.log.length < data.read.log.length) Read.log = data.read.log; saveRead(); }
         saveDays();
         return chain.then(function () { toast(n + (n === 1 ? ' Stück' : ' Stücke') + ' übernommen'); showLibrary(); });
       }).catch(function () { toast('Diese Datei ist keine Tasto-Sicherung.', 3500); });
@@ -5142,7 +5276,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       box.classList.add('setup-box');
       box.appendChild(el('div', { class: 'setup-hero' }, [icon('target')]));
       box.appendChild(el('h2', { text: 'Klavier einstellen' }));
-      box.appendChild(el('p', { class: 'hint', text: 'Damit Tasto deine Töne zuverlässig erkennt, hört es sich dein Klavier einmal an: kurz Ruhe, dann ein A und ein paar einzelne Töne. Danach lernt Tasto beim Üben weiter dazu.' }));
+      box.appendChild(el('p', { class: 'hint', text: 'Damit Tasto deine Töne zuverlässig erkennt, hört es sich dein Klavier einmal an: kurz Ruhe, dann einzelne Töne, Zusammenklänge und Akkorde – die Tasten zeigt dir Tasto. Danach lernt Tasto beim Üben weiter dazu.' }));
       box.appendChild(el('p', { class: 'hint', text: 'Leg das iPhone dorthin, wo es auch beim Üben liegt.' }));
       box.appendChild(el('div', { class: 'acts' }, [
         el('button', { class: 'btn', text: 'Später', onclick: close }),
@@ -5621,16 +5755,20 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       el('b', { text: piece.title || 'Ohne Titel' }), el('span', { class: 'lvl' })]);
     var playBtn = el('button', { class: 'st-play', onclick: onGo, 'aria-label': 'Start' });
     var drawerBtn = el('button', { class: 'st-icon', 'aria-label': 'Steuerung', 'aria-expanded': 'false', onclick: function () { toggleDrawer(); } }, [icon('chevd')]);
-    var notesBtn = el('button', { class: 'st-icon', 'aria-label': 'Noten anzeigen', 'aria-pressed': 'false', onclick: function () { S.stageScore = !S.stageScore; saveSettings(); renderScorePanel(); } }, [icon('music')]);
+    // Ansicht: Noten (Standard – zum Notenlesen) oder Wasserfall-Balken
+    function reading() { return S.stageView !== 'falls'; }
+    function helpOn() { return !reading() || S.readHelp !== false; }
+    var notesBtn = el('button', { class: 'st-view', 'aria-label': 'Ansicht wechseln', onclick: function () { S.stageView = reading() ? 'falls' : 'notes'; saveSettings(); renderScorePanel(); relayout(); toast(reading() ? 'Noten-Ansicht: lies die Noten, Tasto zeigt, wo du bist' : 'Balken-Ansicht', 1800); } }, [icon('music'), el('span')]);
+    var helpBtn = el('button', { class: 'st-help', 'aria-label': 'Lesehilfe: Notennamen und Tasten zeigen', onclick: function () { S.readHelp = S.readHelp === false; saveSettings(); showStep(st.i, true); renderScorePanel(); } }, [el('span')]);
     var micDot = el('span', { class: 'st-mic', hidden: true, title: 'Mikrofon hört zu' }, [icon('mic'), el('i')]);
     // Lernweg: Level-Knopf in der Kopfzeile, Banner während eines Levels
-    var PATH = PL.build(PA.arrange(base, 'orig'), { hands: S.pathMode === 'thorough' });
+    var PATH = PL.build(PA.arrange(base, 'orig'), { hands: S.pathMode !== 'fast' });
     piece.path = piece.path || { done: {} }; piece.path.done = piece.path.done || {}; piece.path.stars = piece.path.stars || {};
-    var P = piece.path, RUNS = 3, lvlApplying = false, lvlTimer = null, lvlMsg = null;
+    var P = piece.path, RUNS = 1, lvlApplying = false, lvlTimer = null, lvlMsg = null;
     var pathBtn = el('button', { class: 'st-path', 'aria-label': 'Lernweg', onclick: function () { showPath(); } }, [icon('flame'), el('span')]);
     var hud = el('div', { class: 'st-hud' }, [
       el('button', { class: 'st-icon', 'aria-label': 'Zur Bibliothek', onclick: function () { showLibrary(); } }, [icon('back')]),
-      titleBtn, micDot, pathBtn, notesBtn, playBtn, drawerBtn]);
+      titleBtn, micDot, pathBtn, helpBtn, notesBtn, playBtn, drawerBtn]);
     var lvlBar = el('div', { class: 'st-lvl', hidden: true });
     /* --- Klappfeld mit allen Funktionen --- */
     var drawer = el('div', { class: 'st-drawer', hidden: true });
@@ -5784,8 +5922,13 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       renderGo(); renderScorePanel(); updateStatus();
     }
     function renderScorePanel() {
-      scorePanel.hidden = !S.stageScore; notesBtn.setAttribute('aria-pressed', S.stageScore ? 'true' : 'false');
-      if (S.stageScore) setTimeout(function () { notation.render(); }, 20);
+      var rd = reading(), show = rd || !!S.stageScore;
+      stage.classList.toggle('reading', rd); stage.classList.toggle('nohelp', !helpOn());
+      notation.fitH = !rd; notation.big = rd;
+      scorePanel.hidden = !show;
+      notesBtn.lastChild.textContent = rd ? 'Noten' : 'Balken'; notesBtn.classList.toggle('on', rd);
+      helpBtn.hidden = !rd; helpBtn.lastChild.textContent = helpOn() ? 'Hilfe an' : 'Hilfe aus'; helpBtn.classList.toggle('on', helpOn());
+      if (show) setTimeout(function () { notation.render(); if (st.steps[st.i]) notation.setStep(st.i); }, 20);
     }
     function toggleDrawer(force) {
       var open = force != null ? force : drawer.hidden;
@@ -5805,7 +5948,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var s = st.steps[i]; st.i = i; st.stepStart = perf(); if (st.askFor !== i) hideAsk();
       if (!s) { kb.setTargets({}); updateStatus(); return; }
       var map = {}, fmap = {}; s.notes.forEach(function (n) { map[n.midi] = n.hand; fmap[n.midi] = fingerOf(s, n); });
-      kb.setTargets(map, S.fingers !== false ? fmap : null); kb.reveal(s.notes.map(function (n) { return n.midi; }));
+      if (helpOn()) kb.setTargets(map, S.fingers !== false ? fmap : null); else kb.setTargets({});
+      kb.reveal(s.notes.map(function (n) { return n.midi; }));
       notation.setStep(i, quiet || scorePanel.hidden);
       // neuer Schritt: gleiche Taste muss neu angeschlagen werden (gehaltene Taste zählt nicht)
       if (mic.det && mic.det.step) { if (mic.det.setWait) mic.det.setWait(st.mode === 'wait'); mic.det.step(perf()); }
@@ -5818,7 +5962,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (st.mode === 'demo') txt = st.demo && s ? '<em>Takt ' + s.bar + '</em> wird vorgespielt' : '<em>Hören</em> Tippe auf ▶';
       else if (st.mode === 'play' && !st.play) txt = '<em>Im Takt</em> Tippe auf ▶ zum Einzählen';
       else if (s) {
-        txt = s.notes.map(function (n) { return noteLabel(n, s); }).join('<i>+</i>');
+        txt = helpOn() ? s.notes.map(function (n) { return noteLabel(n, s); }).join('<i>+</i>') : '<em>Lies</em> ' + (s.notes.length > 1 ? s.notes.length + ' Töne zusammen' : 'die markierte Note');
         var prevS = st.mode === 'wait' && st.input === 'mic' && st.i > 0 ? st.steps[st.i - 1] : null;
         if (prevS && s.notes.some(function (n) { return prevS.notes.some(function (q) { return q.midi === n.midi; }); })) txt += '<small class="again">neu anschlagen</small>';
       }
@@ -5867,15 +6011,20 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function canScroll() { return !st.play && !st.demo && st.steps.length > 0; }
     fall.addEventListener('pointerdown', function (e) {
       if (e.button > 0 || !canScroll()) return;
-      drag = { id: e.pointerId, y0: e.clientY, t0: curTick(), on: false, hist: [[perf(), e.clientY]] };
+      drag = { id: e.pointerId, y0: e.clientY, x0: e.clientX, i0: st.i, t0: curTick(), on: false, hist: [[perf(), e.clientY]] };
     });
     fall.addEventListener('pointermove', function (e) {
       if (!drag || e.pointerId !== drag.id) return;
-      var dy = e.clientY - drag.y0;
+      var dy = e.clientY - drag.y0, dx = e.clientX - drag.x0;
       if (!drag.on) {
-        if (Math.abs(dy) < 10) return;
+        if (Math.abs(reading() ? dx : dy) < 10) return;
         if (st.lvl) { drag = null; flashLvlMsg('Im Level läuft der Abschnitt von vorn – zum Blättern das Level mit × beenden.'); return; }
         drag.on = true; try { fall.setPointerCapture(e.pointerId); } catch (er) { /* ignorieren */ }
+      }
+      if (reading()) { // Noten-Ansicht: im Streifen unter den Noten nach links streichen = weiter, nach rechts = zurück
+        var rr = loopRange(), ni = clamp(drag.i0 + Math.round(-dx / 34), rr[0], rr[1]);
+        if (ni !== st.i) { st.got = {}; st.gotT = 0; st.done = false; clearWrong(); showStep(ni); }
+        e.preventDefault(); return;
       }
       var r = loopRange(), lo = st.steps[r[0]].t - TPQ, hi = st.steps[r[1]].t, pxT = spt() * S.pps;
       dragTick = clamp(drag.t0 + dy / pxT, lo, hi);
@@ -5885,7 +6034,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
     function endDrag(e) {
       if (!drag || (e && e.pointerId !== drag.id)) return;
       var d = drag; drag = null;
-      if (!d.on || dragTick == null) { dragTick = null; return; }
+      if (!d.on || dragTick == null) { dragTick = null; if (d.on && reading()) smoothTick = st.steps[st.i] ? st.steps[st.i].t : smoothTick; return; }
       // Schwung: kurzes schnelles Streichen fährt etwas weiter
       var h = d.hist, v = 0; if (h.length >= 2) { var a = h[0], b = h[h.length - 1]; if (b[0] - a[0] > 0.01) v = (b[1] - a[1]) / (b[0] - a[0]); }
       var r = loopRange(), pxT = spt() * S.pps, target = dragTick + clamp(v * 0.25, -900, 900) / pxT;
@@ -6131,7 +6280,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       persist();
     }
     /* ------ Lernweg ------ */
-    // Jedes Level 3× hintereinander sauber spielen (Mikrofon/MIDI), dann gibt es bis zu 5 Sterne = Punkte und das nächste Level.
+    // Jedes Level einmal sauber spielen (Mikrofon/MIDI), dann gibt es bis zu 5 Sterne = Punkte und das nächste Level.
     // Während des Spielens springt nichts auf: Durchgänge und Ergebnis stehen im Level-Band oben, danach geht es von selbst weiter.
     function lvlOff() { if (lvlApplying || !st.lvl) return; st.lvl = null; clearTimeout(lvlTimer); renderLvl(); }
     function lvlDone(l) { return P.done[l.id] >= l.need; }
@@ -6157,9 +6306,9 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var run = st.lvlRun || { ok: 0 }, dots = '';
       for (var i = 0; i < RUNS; i++) dots += i < run.ok ? '●' : '○';
       var line2 = lvlMsg ? lvlMsg.t : l.sub + ' · Ziel ' + l.need + ' %' + (st.input === 'tap' ? ' · zählt nur mit Mikrofon/MIDI' : '');
-      var need = l.helper ? 2 : RUNS; dots = ''; for (i = 0; i < need; i++) dots += i < run.ok ? '●' : '○';
+      var need = l.helper ? 1 : RUNS; dots = ''; for (i = 0; i < need; i++) dots += i < run.ok ? '●' : '○';
       lvlBar.appendChild(el('div', { class: 'lv-t' }, [el('b', { text: l.helper ? 'Hilfe · ' + l.title : 'Level ' + l.n + '/' + PATH.length + ' · ' + l.title }), el('span', { text: line2 })]));
-      lvlBar.appendChild(el('div', { class: 'lv-runs', title: 'Durchgänge hintereinander' }, [el('b', { text: dots }), el('small', { text: 'Durchgang ' + Math.min(need, run.ok + 1) + '/' + need })]));
+      if (need > 1) lvlBar.appendChild(el('div', { class: 'lv-runs', title: 'Durchgänge hintereinander' }, [el('b', { text: dots }), el('small', { text: 'Durchgang ' + Math.min(need, run.ok + 1) + '/' + need })]));
       if (lvlMsg && lvlMsg.next) lvlBar.appendChild(el('button', { class: 'btn sm primary', onclick: lvlMsg.next }, ['Weiter']));
       lvlBar.appendChild(el('button', { class: 'btn sm', onclick: showPath }, ['Lernweg']));
       lvlBar.appendChild(el('button', { class: 'st-icon', 'aria-label': 'Level beenden', onclick: endLevel }, [icon('close')]));
@@ -6191,8 +6340,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       if (!st.lvl) st.preLvl = { loop: st.loop, hands: st.hands, pct: st.pct, mode: st.mode, level: st.level }; // zum Zurückkehren beim Beenden
       st.lvlRun = { ok: 0, pcts: [], fails: 0 }; lvlMsg = null;
       applyLevel(l); renderLvl();
-      if (l.helper) { flashLvlMsg(l.sub + ' – 2× sauber, dann geht es zurück zu Level ' + l.back.n + '.'); return; }
-      flashLvlMsg(l.mode === 'play' ? 'Tippe auf ▶ – Tasto zählt ein. ' + RUNS + '× hintereinander sauber = Level geschafft.' : 'Spiel los – Tasto wartet auf jeden Ton. ' + RUNS + '× hintereinander sauber = Level geschafft.');
+      if (l.helper) { flashLvlMsg(l.sub + ' – einmal sauber, dann geht es zurück zu Level ' + l.back.n + '.'); return; }
+      flashLvlMsg(l.mode === 'play' ? 'Tippe auf ▶ – Tasto zählt ein. Ein sauberer Durchgang = Level geschafft.' : 'Spiel los – Tasto wartet auf jeden Ton. Ein sauberer Durchgang = Level geschafft.');
     }
     // hakt es: Hilfe anbieten (eine Hand allein bzw. langsamer) – freiwillig, zählt nicht
     function helpBtns(l) {
@@ -6222,13 +6371,12 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       }
       run.ok++; run.pcts.push(pct); run.fails = 0;
       if (l.helper) {
-        if (run.ok < 2) return nextRun(l, 'Sitzt fast: ' + pct + ' % – noch 1×.', 'good');
-        flashLvlMsg('Sitzt! Zurück zu Level ' + l.back.n + '.', 'good');
+                flashLvlMsg('Sitzt! Zurück zu Level ' + l.back.n + '.', 'good');
         lvlTimer = setTimeout(function () { if (st.lvl === l && root.contains(stage)) startLevel(l.back); }, 1800);
         return;
       }
       if (run.ok < RUNS) return nextRun(l, 'Durchgang ' + run.ok + ' geschafft: ' + pct + ' % ' + starStr(runStars(pct)) + ' – noch ' + (RUNS - run.ok) + '× hintereinander.', 'good');
-      // Level geschafft: Sterne aus den drei Durchgängen (5 = alle drei fehlerfrei)
+      // Level geschafft: Sterne aus dem Durchgang (5 = fehlerfrei)
       var sum = 0; run.pcts.forEach(function (x) { sum += runStars(x); });
       var stars = Math.floor(sum / run.pcts.length), avg = Math.round(run.pcts.reduce(function (a, b) { return a + b; }, 0) / run.pcts.length);
       var newBest = !(P.stars[l.id] >= stars);
@@ -6239,7 +6387,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       st.lvlRun = { ok: RUNS, pcts: run.pcts };
       if (!nx) { flashLvlMsg('Lied gemeistert! ' + starStr(stars) + ' · ' + points() + ' Punkte insgesamt.', 'good'); return; }
       var go = function () { clearTimeout(lvlTimer); startLevel(nx); };
-      lvlMsg = { t: 'Level geschafft! ' + starStr(stars) + ' +' + stars + ' Punkte' + (stars < 5 ? ' (5 Sterne gibt es für 3 fehlerfreie Durchgänge)' : '') + ' – gleich geht es mit Level ' + nx.n + ' weiter.', kind: 'good', next: go };
+      lvlMsg = { t: 'Level geschafft! ' + starStr(stars) + ' +' + stars + ' Punkte' + (stars < 5 ? ' (5 Sterne gibt es für einen fehlerfreien Durchgang)' : '') + ' – gleich geht es mit Level ' + nx.n + ' weiter.', kind: 'good', next: go };
       renderLvl();
       lvlTimer = setTimeout(function () { if (st.lvl === l && root.contains(stage)) go(); }, 5000);
     }
@@ -6248,10 +6396,10 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         box.classList.add('pathbox');
         var nDone = PL.count(PATH, P.done), nx = PL.next(PATH, P.done);
         box.appendChild(el('h2', { text: 'Lernweg' }));
-        box.appendChild(el('p', { class: 'hint', text: 'Du baust das Lied Abschnitt für Abschnitt auf: erst ohne Takt (Tasto wartet auf dich), dann im Takt, dann verbindest du ihn mit allem davor – bis zum ganzen Lied im Originaltempo. Jedes Level ' + RUNS + '× hintereinander sauber; Tasto prüft über das Mikrofon. 3 fehlerfreie Durchgänge = 5 Sterne. Hakt eine Stelle, bietet Tasto Hilfen an (eine Hand allein, langsamer).' }));
+        box.appendChild(el('p', { class: 'hint', text: 'Du baust das Lied Abschnitt für Abschnitt auf: erst die rechte Hand, dann die linke, dann beide zusammen (Tasto wartet auf dich), dann im Takt – und am Ende das ganze Lied im Originaltempo. Ein sauberer Durchgang reicht, Tasto prüft über das Mikrofon. Fehlerfrei = 5 Sterne. Hakt eine Stelle, bietet Tasto Hilfen an.' }));
         var modeBox = el('div', { class: 'seg path-mode' });
         [['fast', 'Zügig', 'gleich beide Hände'], ['thorough', 'Gründlich', 'erst jede Hand einzeln']].forEach(function (o) {
-          modeBox.appendChild(el('button', { 'aria-pressed': (S.pathMode || 'fast') === o[0] ? 'true' : 'false', onclick: function () {
+          modeBox.appendChild(el('button', { 'aria-pressed': (S.pathMode || 'thorough') === o[0] ? 'true' : 'false', onclick: function () {
             S.pathMode = o[0]; saveSettings(); PATH = PL.build(PA.arrange(base, 'orig'), { hands: o[0] === 'thorough' }); if (st.lvl && !st.lvl.helper) { st.lvl = null; lvlMsg = null; } close(); renderLvl(); showPath();
           } }, [el('b', { text: o[1] }), el('small', { text: o[2] })]));
         });
@@ -6330,6 +6478,124 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       document.body.classList.remove('stage-on');
     };
   }
+  /* ================= Noten lesen lernen ================= */
+  // Stand je Stufe: { stars, acc, sec, runs }; dazu ein kleines Verlaufsbuch
+  var Read = {};
+  try { Read = JSON.parse(localStorage.getItem('ks-read') || '{}') || {}; } catch (e) { Read = {}; }
+  function saveRead() { try { localStorage.setItem('ks-read', JSON.stringify(Read)); } catch (e) { /* ignorieren */ } }
+  Read.lv = Read.lv || {}; Read.log = Read.log || [];
+  function readNext() { for (var i = 0; i < PR.LEVELS.length; i++) { var x = Read.lv[PR.LEVELS[i].id]; if (!(x && x.stars >= 3)) return PR.LEVELS[i]; } return null; }
+  function readOpen(l) { var nx = readNext(); return !nx || l.n <= nx.n; }
+  function starsTxt(n) { var o = ''; for (var i = 0; i < 5; i++) o += i < n ? '★' : '☆'; return o; }
+  function readingCard() {
+    var nx = readNext(), done = PR.LEVELS.filter(function (l) { return Read.lv[l.id] && Read.lv[l.id].stars >= 3; }).length;
+    return el('button', { class: 'read-card', onclick: function () { showReading(); } }, [
+      el('div', { class: 'rc-ic' }, [icon('music')]),
+      el('div', { class: 'rc-t' }, [el('span', { class: 'k', text: 'Noten lesen lernen' }), el('b', { text: nx ? 'Stufe ' + nx.n + ': ' + nx.title : 'Alle Stufen geschafft' }),
+        el('div', { class: 'pbar-lw' }, [el('i', { style: 'width:' + Math.round(100 * done / PR.LEVELS.length) + '%' })])]),
+      icon('chevr')]);
+  }
+  function showReading() {
+    go(function () {
+      var view = el('div', { class: 'view scroll read' });
+      view.appendChild(el('div', { class: 'bar' }, [ibtn('back', 'Zurück', function () { showLibrary(); }), el('h1', { text: 'Noten lesen' })]));
+      var nx = readNext(), done = PR.LEVELS.filter(function (l) { return Read.lv[l.id] && Read.lv[l.id].stars >= 3; }).length;
+      var tot = 0; PR.LEVELS.forEach(function (l) { tot += (Read.lv[l.id] && Read.lv[l.id].stars) || 0; });
+      view.appendChild(el('div', { class: 'read-hero' }, [
+        el('p', { text: 'Eine Note erscheint – du spielst sie am Piano. Tasto hört zu, misst wie schnell du liest, und schaltet die nächste Stufe frei, sobald du 90 % triffst. Am besten jeden Tag eine Runde: so liest du bald vom Blatt.' }),
+        el('div', { class: 'read-sum' }, [el('div', {}, [el('b', { text: done + '/' + PR.LEVELS.length }), el('span', { text: 'Stufen' })]), el('div', {}, [el('b', { text: '★ ' + tot }), el('span', { text: 'Sterne' })]), el('div', {}, [el('b', { text: String(Read.log.length) }), el('span', { text: 'Runden' })])]),
+        nx ? el('button', { class: 'btn primary big', onclick: function () { runReading(nx); } }, [icon('play'), 'Stufe ' + nx.n + ' üben']) : null
+      ]));
+      var list = el('div', { class: 'path-list' });
+      PR.LEVELS.forEach(function (l) {
+        var x = Read.lv[l.id], open = readOpen(l), cur = nx && nx.id === l.id;
+        list.appendChild(el('button', { class: 'path-lv' + (x && x.stars >= 3 ? ' done' : '') + (cur ? ' cur' : '') + (!open ? ' locked' : ''), disabled: !open ? true : null, onclick: function () { runReading(l); } }, [
+          el('span', { class: 'n', text: x && x.stars >= 3 ? '✓' : open ? String(l.n) : '🔒' }),
+          el('div', {}, [el('b', { text: l.title }), el('span', { text: x ? l.sub + ' · bestens ' + x.acc + ' %, ' + x.sec + ' s pro Note' : l.sub })]),
+          el('span', { class: 'pc' + (x ? ' st' : ''), text: x ? starsTxt(x.stars) : '' })]));
+      });
+      view.appendChild(list);
+      root.appendChild(view);
+    });
+  }
+  function runReading(l) {
+    go(function () {
+      var cards = PR.round(l, window.__readRnd), i = 0, res = [], t0 = 0, wrongNow = false, got = {}, input = S.inputPref === 'tap' || ENV.artifact ? 'tap' : 'mic';
+      var mic = new Mic(), kb = null, done = false, timeT = 0, tries = 0;
+      var view = el('div', { class: 'view read-run' });
+      var title = el('h1', { text: 'Stufe ' + l.n + ': ' + l.title });
+      var dots = el('div', { class: 'rd-dots' }), paper = el('div', { class: 'rd-paper' }), fb = el('div', { class: 'rd-fb' }), timer = el('span', { class: 'rd-time' });
+      var hint = el('button', { class: 'btn sm', onclick: function () { if (done) return; wrongNow = true; fb.className = 'rd-fb help'; fb.textContent = 'Das ist ' + cards[i].names.join(' + ') + ' – spiel es jetzt.'; } }, ['Welche Note?']);
+      var inSeg = el('div', { class: 'seg' }); [['mic', 'Mikrofon'], ['tap', 'Bildschirm']].forEach(function (o) { inSeg.appendChild(el('button', { 'aria-pressed': input === o[0] ? 'true' : 'false', onclick: function () { input = o[0]; Array.prototype.forEach.call(inSeg.children, function (b, k) { b.setAttribute('aria-pressed', ['mic', 'tap'][k] === input ? 'true' : 'false'); }); startInput(); } }, [o[1]])); });
+      view.appendChild(el('div', { class: 'bar' }, [ibtn('back', 'Zurück', function () { showReading(); }), title]));
+      view.appendChild(el('div', { class: 'rd-top' }, [dots, timer]));
+      view.appendChild(paper); view.appendChild(fb);
+      view.appendChild(el('div', { class: 'row rd-tools' }, [inSeg, hint]));
+      var tools = view.lastChild, kbBox = el('div', { class: 'rd-kb' }); view.appendChild(kbBox);
+      root.appendChild(view);
+      kb = new Keyboard(kbBox, function (m) { Snd.resume(); if (S.tapSound !== false && input === 'tap') Snd.play(m, Snd.now() + 0.01, 0.5, 0.7); onNote(m); }, function () {});
+      // Klaviatur: genau der Bereich der Stufe (+ Rand), passend zur Breite – kein Scrollen, kein Verraten
+      var allM = []; (l.pool || []).forEach(function (n) { allM.push(n.midi); }); (l.chords || []).forEach(function (c) { c.forEach(function (t) { allM.push(12 * (+t.slice(1) + 1) + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[t[0]]); }); });
+      var lo = Math.min.apply(null, allM) - 3, hi = Math.max.apply(null, allM) + 3;
+      while (PC.isBlack(lo)) lo--; while (PC.isBlack(hi)) hi++;
+      while (hi - lo < 16) { lo--; hi++; while (PC.isBlack(lo)) lo--; while (PC.isBlack(hi)) hi++; }
+      var ks = S.kbSize; S.kbSize = 'fit'; kb.setRange(lo, hi); S.kbSize = ks;
+      function drawDots() { clear(dots); cards.forEach(function (c, k) { dots.appendChild(el('i', { class: k < res.length ? (res[k].wrong ? 'bad' : 'ok') : k === i ? 'cur' : '' })); }); }
+      function show() {
+        var c = cards[i]; got = {}; wrongNow = false; fb.className = 'rd-fb'; fb.textContent = c.notes.length > 1 ? 'Spiel alle ' + c.notes.length + ' Töne zusammen.' : '';
+        var p = PC.parseABC(c.abc); clear(paper); tries = 0;
+        var r = PE.engrave(p.score, { width: 150, ss: 10, noMeter: true, ink: '#141821' });
+        paper.innerHTML = r.svg; drawDots(); t0 = perf();
+        if (mic.det && mic.det.step) { mic.det.setWait(true); mic.det.step(perf()); }
+      }
+      function onNote(m, t, kind) {
+        if (done) return; var c = cards[i]; if (!c) return;
+        if (c.midis.indexOf(m) >= 0) {
+          got[m] = 1; kb.flash(m, 'ok');
+          if (Object.keys(got).length >= c.midis.length) {
+            res.push({ ms: (perf() - t0) * 1000, wrong: wrongNow, names: c.names });
+            fb.className = 'rd-fb ok'; fb.textContent = '✓ ' + c.names.join(' + ');
+            i++;
+            if (i >= cards.length) return finish();
+            setTimeout(function () { if (!done) show(); }, 380);
+          }
+        } else {
+          kb.flash(m, 'bad');
+          wrongNow = true;
+          tries++;
+          fb.className = 'rd-fb bad'; fb.textContent = '✗ Das war ' + PR.label(m) + (tries >= 2 ? ' – gesucht ist ' + c.names.join(' + ') + '.' : ' – schau nochmal hin.');
+        }
+      }
+      function startInput() {
+        mic.stop();
+        if (input === 'mic') mic.start(function (m, t, kind) { onNote(m, t, kind); }, function () { var c = cards[i]; return c ? c.midis.filter(function (m) { return !got[m]; }) : []; }, null).then(function () { if (mic.det) { mic.det.setWait(true); mic.det.step(perf()); } }).catch(function (e) { input = 'tap'; toast('Mikrofon nicht verfügbar – tipp die Töne auf der Klaviatur.', 3500); Array.prototype.forEach.call(inSeg.children, function (b, k) { b.setAttribute('aria-pressed', ['mic', 'tap'][k] === input ? 'true' : 'false'); }); });
+      }
+      function finish() {
+        done = true; mic.stop(); clearInterval(timeT);
+        var g = PR.grade(res), old = Read.lv[l.id], better = !old || g.stars > old.stars || (g.stars === old.stars && g.acc > old.acc);
+        if (better) Read.lv[l.id] = { stars: g.stars, acc: g.acc, sec: g.sec, runs: ((old && old.runs) || 0) + 1 }; else old.runs = (old.runs || 0) + 1;
+        Read.log.push({ d: dayKey(), l: l.id, acc: g.acc, sec: g.sec }); if (Read.log.length > 400) Read.log.shift();
+        saveRead();
+        var k = dayKey(); Days[k] = (Days[k] || 0) + Math.round(res.reduce(function (a, r) { return a + r.ms; }, 0) / 1000); saveDays();
+        var nx = readNext(), wrongs = res.filter(function (r) { return r.wrong; }).map(function (r) { return r.names.join('+'); });
+        clear(paper); paper.classList.add('done'); tools.hidden = true; kbBox.hidden = true; timer.textContent = '';
+        paper.appendChild(el('div', { class: 'rd-res' }, [
+          el('div', { class: 'lv-stars', text: starsTxt(g.stars) }),
+          el('h2', { text: g.pass ? (nx && nx.n > l.n && (!old || old.stars < 3) ? 'Stufe geschafft – die nächste ist frei!' : 'Stark gelesen!') : 'Noch nicht ganz – nochmal!' }),
+          el('div', { class: 'result-n' }, [el('div', {}, [el('b', { text: g.acc + ' %' }), el('span', { text: 'richtig' })]), el('div', {}, [el('b', { text: g.sec + ' s' }), el('span', { text: 'pro Note' })]), el('div', {}, [el('b', { text: String(res.length) }), el('span', { text: 'Noten' })])]),
+          el('p', { class: 'hint', text: wrongs.length ? 'Schau dir diese nochmal an: ' + wrongs.slice(0, 6).join(', ') + '.' : g.stars < 5 ? '5 Sterne gibt es, wenn du alles richtig und in unter 2 Sekunden pro Note liest.' : 'Perfekt – fehlerfrei und flüssig.' }),
+          el('div', { class: 'acts' }, [el('button', { class: 'btn', onclick: function () { runReading(l); } }, ['Nochmal']),
+            nx && nx.id !== l.id && g.pass ? el('button', { class: 'btn primary', onclick: function () { runReading(nx); } }, ['Stufe ' + nx.n]) : el('button', { class: 'btn primary', onclick: function () { showReading(); } }, ['Übersicht'])])
+        ]));
+        fb.textContent = ''; drawDots();
+      }
+      window.__readCard = function () { return done ? null : cards[i]; };
+      timeT = setInterval(function () { if (!done && cards[i]) timer.textContent = ((perf() - t0)).toFixed(1) + ' s'; }, 100);
+      setTimeout(function () { show(); startInput(); }, 30);
+      cleanup = function () { done = true; clearInterval(timeT); mic.stop(); };
+    });
+  }
+
   function showScans(piece) {
     overlay(function (box, close) {
       box.classList.add('scanbox');
@@ -6342,7 +6608,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
 
   /* ================= Klavier einmessen ================= */
   var calAsked = false, micAutoFailed = false;
-  function calP() { return S.cal ? { accept: S.cal.accept, riseDb: S.cal.riseDb, gateDb: S.cal.gateDb } : null; }
+  // Erkennung: Kalibrierung + Strenge (Locker: die Hör-KI akzeptiert auch schwächere, aber eindeutige Spuren; Streng: wie bisher, nur klare Anschläge)
+  function calP() {
+    var o = {};
+    if (S.cal) ['accept', 'riseDb', 'gateDb'].forEach(function (k) { if (S.cal[k] != null) o[k] = S.cal[k]; });
+    var st = S.strict || 'normal';
+    if (st === 'easy') { o.kiLoose = true; o.accept = (o.accept || 0.35) * 0.85; o.riseDb = Math.max(3, (o.riseDb || 5) - 1); o.kiOnly = 0.5; o.kiOnlyNt = 0.3; }
+    if (st === 'strict') { o.accept = (o.accept || 0.35) * 1.1; }
+    return Object.keys(o).length ? o : null;
+  }
   function calibrate(after, opts) {
     opts = opts || {};
     var mic = new Mic(), det = null, io = null, timer = null, stage = null, rec = { notes: [], log: [] }, closed = false, recording = false;
@@ -6668,6 +6942,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         slider('Wasserfall-Tempo', 'pps', 80, 320, 10, function (v) { return v < 130 ? 'ruhig' : v < 220 ? 'mittel' : 'schnell'; })
       ]));
       box.appendChild(group('Mikrofon', [
+        select('Erkennung', 'strict', [['easy', 'Locker – lieber mal einen Ton durchlassen'], ['normal', 'Normal (empfohlen)'], ['strict', 'Streng – nur ganz klare Anschläge']]),
         slider('Empfindlichkeit', 'sens', -10, 15, 1, function (v) { return (v > 0 ? '+' : '') + v + ' dB'; }),
         slider('Stimmung A4', 'a4', 430, 450, 1, function (v) { return v + ' Hz'; }),
         el('button', { class: 'btn primary', onclick: function () { close(); calibrate(); } }, [icon('target'), S.cal ? 'Klavier neu einstellen' : 'Klavier einstellen']),
