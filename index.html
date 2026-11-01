@@ -567,6 +567,23 @@ input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px;
   .sd-bar.split .sd-ch span { display: none; }
   .sd-bar.split .sd-ch b { overflow: visible; }
 }
+.sh-sub { margin: -4px 0 4px; }
+.sd-sec { grid-column: 1 / -1; margin: 6px 0 -2px; font: 700 11.5px var(--f-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.sd-sec::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.sd-sec.sec-Refrain { color: #ffc56b; }
+.sd-sec.sec-Strophe { color: #7cc0ff; }
+.sd-sec.sec-Intro, .sd-sec.sec-Outro { color: #c9b0ff; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.lib-tile { display: grid; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.lib-tile b { font: 700 16px var(--f-title); }
+.lib-tile .lt-st { justify-self: start; padding: 2px 8px; border-radius: 99px; font: 700 10.5px var(--f-ui); letter-spacing: .05em; text-transform: uppercase; color: #fff; }
+.lib-tile .lt-d { font-size: 12.5px; color: var(--muted); }
+.lib-tile .lt-c { font: 600 12px var(--f-mono); color: #c9b0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.teach-box { display: grid; gap: 10px; }
+.teach-opt { display: grid; gap: 4px; text-align: left; padding: 14px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-solid)); color: var(--ink); font: inherit; cursor: pointer; }
+.teach-opt b { font: 700 16px var(--f-title); }
+.teach-opt span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.score-svg .csym { fill: #6b3fd6; }
 
 </style>
 <div id="app"></div>
@@ -761,6 +778,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         if (v.tup.left <= 0) v.tup = null;
       }
       var ev = { id: -1, staff: v.staff, t: v.t, nom: nom, dur: dur, rest: isRest, pitches: pitches, bar: v.bar, tup: tup, line: line, full: !!(extra && extra.full) };
+      if (v.pendSym) { ev.sym = v.pendSym; v.pendSym = null; }
       v.events.push(ev); v.last = ev;
       v.t += dur;
       return ev;
@@ -775,7 +793,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
         v = S.cur;
         if (c === ' ' || c === '\t') { i++; continue; }
         if (c === '\\') { i++; continue; }
-        if (c === '"') { var q = text.indexOf('"', i + 1); i = q < 0 ? n : q + 1; continue; }
+        if (c === '"') { var q = text.indexOf('"', i + 1), sy = text.slice(i + 1, q < 0 ? n : q); if (sy && '^_<>@'.indexOf(sy[0]) < 0) v.pendSym = sy; i = q < 0 ? n : q + 1; continue; } // Akkordsymbol über der nächsten Note
         if (c === '!') { var q2 = text.indexOf('!', i + 1); i = q2 < 0 ? n : q2 + 1; continue; }
         if (c === '+') { var q3 = text.indexOf('+', i + 1); i = q3 < 0 ? i + 1 : q3 + 1; continue; }
         if (c === '{') { var q4 = text.indexOf('}', i + 1); i = q4 < 0 ? n : q4 + 1; continue; }
@@ -1315,7 +1333,8 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
           });
         });
       });
-      var ty = {}, y = cursorY, bottom;
+      var hasSym = sy.ms.some(function (mi) { return (byBar[staffs[0]][M[mi].m.n] || []).some(function (ev) { return ev.sym; }); });
+      var ty = {}, y = cursorY + (hasSym ? 2.4 : 0), bottom;
       if (nSt === 2) {
         var aboveR = Math.max(3.2, (ext.R.mx - 38) * 0.5 + 3.0);
         var belowR = Math.max(0, (30 - Math.min(ext.R.mn, 30)) * 0.5) + 1.2;
@@ -1381,6 +1400,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
           var items = [];
           mm.cols.forEach(function (c) {
             (c.evs[s] || []).forEach(function (ev) {
+              if (ev.sym && s === staffs[0]) P.push('<text class="csym" x="' + r2(c.ax - 0.6) + '" y="' + r2(sy.top - 0.6) + '" font-size="1.75" font-weight="700" font-family="system-ui,-apple-system,sans-serif" fill="' + ink + '">' + String(ev.sym).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</text>');
               if (ev.rest) {
                 var rx = ev.full ? mxx + (mm.nat * f) / 2 : c.ax;
                 P.push('<g class="ev ' + s + '" data-e="' + ev.id + '">' + restGlyph(ev.full ? 1 : ev.val, rx, tys, ink, ev.full) + '</g>');
@@ -3912,73 +3932,89 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     return L.map(function (x) { return { r: mod(t + x[0], 12), q: x[1] }; });
   }
 
-  /* ---------- Voicings: linke Hand Bass + Stütze, rechte Hand obere Töne, mit kurzen Wegen ---------- */
-  var RICH = { pop: 0, ballad: 0, lofi: 2, neosoul: 2, jazz: 2, bossa: 1 };
-  function rhTones(c, style, ex) {
-    var q = Q[c.q] || Q[''], iv = q.iv.map(function (x) { return x; }), rich = RICH[style] || 0;
-    var by = {}; iv.forEach(function (x) { by[x[1]] = x; });
-    var hasExt = iv.some(function (x) { return x[0] > 12 || x[1] === 6 && x[0] === 9; });
-    var pick;
-    if (iv.length <= 3) pick = iv; // Dreiklang: alle drei
-    else {
-      // Wichtigkeit: Terz/Quarte, Septime/Sexte, Optionen, dann Quinte, Grundton
-      var order = iv.slice(1).filter(function (x) { return ex == null || mod(c.r + x[0], 12) !== ex; }).sort(function (a, b) { return rank(a) - rank(b); });
-      if (order.length < 3) order.push(iv[0]);
-      var n = rich >= 2 ? 4 : hasExt ? 4 : 3;
-      pick = order.slice(0, n);
-      if (rich === 0 && !by[7] && iv.length === 4) pick = iv.slice(); // Sexte/add9 in Pop: ganzer Akkord
-    }
-    return pick.map(function (x) { return mod(c.r + x[0], 12); });
-    function rank(x) {
-      var o = x[0] % 12;
-      if (x[1] === 3 || (x[1] === 4 && x[0] === 5)) return 0;
+  /* ---------- Voicings: so, wie ein Pianist greift – offene linke Hand, volle rechte Hand mit Optionstönen, kurze Wege ---------- */
+  var RICH = { pop: 0, ballad: 1, lofi: 2, neosoul: 2, jazz: 2, bossa: 1 };
+  function ivOf(q, deg) { var x = (Q[q] || Q['']).iv.filter(function (y) { return y[1] === deg; })[0]; return x ? x[0] : null; }
+  // Töne der rechten Hand nach Wichtigkeit; ex = Tonklassen, die die linke Hand schon spielt
+  function rhTones(c, style, ex, n) {
+    var q = Q[c.q] || Q[''], iv = q.iv, rich = RICH[style] || 0;
+    var cand = iv.map(function (x) { return { pc: mod(c.r + x[0], 12), x: x }; });
+    // schöne Farben dazunehmen, die der Akkord verträgt
+    var third = ivOf(c.q, 3), sev = ivOf(c.q, 7), plainTri = iv.length === 3 && third != null && ivOf(c.q, 5) === 7;
+    if (plainTri && rich >= 1) cand.push({ pc: mod(c.r + 14, 12), x: [14, 2], add: true }); // Dreiklang + None: weich, „schwebend“
+    if ((c.q === 'm7' || c.q === 'm9') && rich >= 2) cand.push({ pc: mod(c.r + 14, 12), x: [14, 2], add: true }, { pc: mod(c.r + 17, 12), x: [17, 4], add: true });
+    if ((c.q === 'maj7' || c.q === 'maj9') && rich >= 2) cand.push({ pc: mod(c.r + 14, 12), x: [14, 2], add: true }, { pc: mod(c.r + 21, 12), x: [21, 6], add: true });
+    if (c.q === '7' && rich >= 2) cand.push({ pc: mod(c.r + 14, 12), x: [14, 2], add: true }, { pc: mod(c.r + 21, 12), x: [21, 6], add: true });
+    function rank(o) {
+      var x = o.x, s = x[0] % 12;
+      if (x[0] === 0) return 9;
+      if (x[1] === 3 || (x[1] === 4 && s === 5)) return 0;
       if (x[1] === 7) return 1;
-      if (x[1] === 6 && x[0] === 9 && !by[7]) return 1.5;
-      if (x[0] > 12) return 2 + (x[0] === 21 ? 0 : x[0] === 14 ? 0.2 : 0.4);
-      if (x[1] === 5) return o === 7 ? 6 : 1.8; // verminderte/übermäßige Quinte ist Farbe
+      if (x[0] === 9 && x[1] === 6 && sev == null) return 1.4;
+      if (x[0] > 12) return 2 + (x[0] === 14 || x[0] === 13 || x[0] === 15 ? 0 : x[0] === 21 || x[0] === 20 ? 0.1 : 0.3) + (o.add ? 0.2 : 0);
+      if (x[1] === 2) return 2;
+      if (x[1] === 5) return s === 7 ? 5 : 1.6;
       return 7;
     }
+    var seen = {};
+    var list = cand.filter(function (o) { if (seen[o.pc] || (ex && ex.indexOf(o.pc) >= 0)) return false; seen[o.pc] = 1; return true; }).sort(function (a, b) { return rank(a) - rank(b); });
+    n = n || (rich === 0 ? (iv.length > 3 ? 4 : 3) : 4);
+    if (rich === 0 && plainTri) return [0, third, 7].map(function (x) { return mod(c.r + x, 12); }); // Pop: klarer Dreiklang
+    var out = list.filter(function (o) { return o.x[0] !== 0; }).slice(0, n).map(function (o) { return o.pc; });
+    if (out.length < 3) { var f5 = mod(c.r + (ivOf(c.q, 5) || 7), 12); if (out.indexOf(f5) < 0 && (!ex || ex.indexOf(f5) < 0)) out.push(f5); }
+    if (out.length < 3) { var r = mod(c.r, 12); if (out.indexOf(r) < 0) out.push(r); }
+    return out;
   }
-  function voicing(c, prev, style) {
-    var lo = 55, hi = 79;
-    var root = c.bass != null ? c.bass : c.r;
-    var lr = 36 + mod(root - 36, 12); if (lr > 45) lr -= 12; // tiefer Grundton zwischen A1 und A2…F#2
-    if (lr < 33) lr += 12;
-    var q = Q[c.q] || Q[''], has7 = q.iv.some(function (x) { return x[1] === 7; }), fifth = q.iv.filter(function (x) { return x[1] === 5; })[0];
-    var lh = [lr];
-    var rich = RICH[style] || 0;
-    if (rich >= 1 && has7 && c.bass == null) { var s7 = q.iv.filter(function (x) { return x[1] === 7; })[0][0]; lh.push(lr + s7); } // Grundton + Septime
-    else lh.push(lr + (fifth ? fifth[0] : 7));
-    var pcs = rhTones(c, style, lh.length > 1 && rich >= 1 && has7 && c.bass == null ? mod(lh[1], 12) : null);
-    // alle Lagen der rechten Hand aufzählen
+  // tiefer Grundton für die linke Hand (C2…H2, sehr tiefe Töne eine Oktave höher)
+  function lowRoot(pc) { var r = 36 + mod(pc - 36, 12); if (r > 45) r -= 12; if (r < 33) r += 12; return r; }
+  function leftHand(c, style) {
+    var root = c.bass != null ? c.bass : c.r, lr = lowRoot(root), third = ivOf(c.q, 3), sev = ivOf(c.q, 7), fifth = ivOf(c.q, 5);
+    if (c.bass != null && c.bass !== c.r) return [lr, lr + 12]; // Wechselbass: Oktave
+    var tenth = third != null ? lr + 12 + third : null, f = fifth != null ? fifth : 7;
+    switch (style) {
+      case 'pop': return [lr, lr + f, lr + 12];
+      case 'ballad': return tenth && tenth <= 57 ? [lr, lr + f, tenth] : [lr, lr + f, lr + 12];
+      case 'jazz': case 'bossa': return sev != null ? [lr, lr + sev] : [lr, lr + f];
+      default: // Lo-Fi, Neo-Soul: Grundton, Septime, Dezime – breit und warm
+        if (sev != null && tenth && tenth <= 58) return [lr, lr + sev, tenth];
+        if (sev != null) return [lr, lr + sev];
+        return tenth && tenth <= 57 ? [lr, lr + f, tenth] : [lr, lr + f];
+    }
+  }
+  function voicing(c, prev, style, opt) {
+    opt = opt || {};
+    var hi = opt.top || 79, lh = leftHand(c, style), rich = RICH[style] || 0;
+    var t3 = ivOf(c.q, 3), t7 = ivOf(c.q, 7);
+    var ex = rich >= 1 ? lh.slice(1).map(function (m) { return mod(m, 12); }).filter(function (p) { return (t3 != null && p === mod(c.r + t3, 12)) || (t7 != null && p === mod(c.r + t7, 12)); }) : null;
+    var pcs = rhTones(c, style, ex, opt.n), lo = Math.max(52, lh[lh.length - 1] + 3);
     var sorted = pcs.slice().sort(function (a, b) { return a - b; }), cands = [];
     for (var rot = 0; rot < sorted.length; rot++) {
       var seq = sorted.slice(rot).concat(sorted.slice(0, rot));
-      for (var base = lo - 12; base <= hi; base++) {
+      for (var base = lo; base <= hi; base++) {
         if (mod(base, 12) !== seq[0]) continue;
-        var v = [base], ok = true;
+        var v = [base];
         for (var j = 1; j < seq.length; j++) { var x = v[j - 1] + mod(seq[j] - v[j - 1], 12); if (x === v[j - 1]) x += 12; v.push(x); }
-        if (v[0] < lo - 2 || v[v.length - 1] > hi) ok = false;
-        if (ok && v[0] <= lh[lh.length - 1] + 2) ok = false;
-        if (ok) cands.push(v);
+        if (v[v.length - 1] <= hi) cands.push(v);
+        // Drop-2: zweitoberste Stimme eine Oktave tiefer – offener, edler Klang
+        if (v.length === 4 && rich >= 1) { var d2 = [v[2] - 12, v[0], v[1], v[3]]; if (d2[0] >= lo) cands.push(d2); }
       }
     }
     if (!cands.length) cands.push(sorted.map(function (p) { return 60 + p; }));
-    var best = null, bc = 1e9, pc0 = prev && prev.rh && prev.rh.length ? prev.rh : null;
+    var best = null, bc = 1e9, pv = prev && prev.rh && prev.rh.length ? prev.rh : null, target = opt.center || (rich >= 1 ? 66 : 67);
     cands.forEach(function (v) {
-      var c0 = 0, top = v[v.length - 1], mid = (v[0] + top) / 2;
-      if (pc0) {
-        var pm = (pc0[0] + pc0[pc0.length - 1]) / 2; c0 += Math.abs(mid - pm) * 1.2;
-        c0 += Math.abs(top - pc0[pc0.length - 1]) * 0.6; // Melodie oben möglichst ruhig
-      } else c0 += Math.abs(mid - 66) * 0.8;
-      if (top - v[0] > 12) c0 += (top - v[0] - 12) * 2;
-      if (v.length > 1 && v[v.length - 1] - v[v.length - 2] === 1) c0 += 3; // kleine Sekunde oben klingt hart
-      if (v[0] < 57) c0 += (57 - v[0]) * 0.8; // zu tief wird matschig
-      if (c0 < bc) { bc = c0; best = v; }
+      var k = 0, top = v[v.length - 1], bot = v[0], mid = (bot + top) / 2, span = top - bot;
+      if (pv) { k += Math.abs(mid - (pv[0] + pv[pv.length - 1]) / 2) * 1.1 + Math.abs(top - pv[pv.length - 1]) * 0.7; }
+      k += Math.abs(mid - target) * 0.5;
+      if (span > (rich >= 1 ? 16 : 12)) k += (span - 12) * 2;
+      if (rich >= 1 && span < 7) k += 1.5; // zu eng klingt dumpf
+      for (var i = 1; i < v.length; i++) { var gp = v[i] - v[i - 1]; if (gp === 1) k += i === v.length - 1 ? 4 : 2; if (gp <= 2 && i >= 2 && v[i - 1] - v[i - 2] <= 2) k += 2.5; } // Reibung und Cluster vermeiden
+      if (bot < 55) k += (55 - bot) * 0.9;
+      if (bot - lh[lh.length - 1] > 14) k += (bot - lh[lh.length - 1] - 14) * 0.3; // Loch zwischen den Händen
+      if (k < bc) { bc = k; best = v; }
     });
     return { lh: lh, rh: best };
   }
-  function voiceAll(chords, style) { var prev = null; return chords.map(function (c) { var v = voicing(c, prev, style); prev = v; return v; }); }
+  function voiceAll(chords, style, opt) { var prev = null; return chords.map(function (c) { var v = voicing(c, prev, style, opt); prev = v; return v; }); }
 
   /* ---------- Stile ---------- */
   var STYLES = {
@@ -4042,6 +4078,10 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
   function isDom(q) { return /^(7|9|13|7b9|7#9|7alt|7sus4|9sus4)$/.test(q); }
   // Stufe 1: Septimen und Optionen; Stufe 2: Zwischendominanten / ii–V vor Zielakkorden; Stufe 3: Tritonus-Ersatz, Durchgangs-Verminderte, Alterationen
   function jazzify(key, chords, level) {
+    var res = jazzify0(key, chords, level), tl = timeline(chords), t = 0;
+    return res.map(function (c) { var src = chordAt(tl, t); t += c.b; if (src.c.sec) c.sec = src.c.sec; if (src.c.fin && Math.abs(src.t - (t - c.b)) < 1e-6) { c.fin = true; c.q = src.c.q === c.q ? c.q : c.q; } return c; });
+  }
+  function jazzify0(key, chords, level) {
     var cs = chords.map(function (c) { return { r: c.r, q: c.q, b: c.b, bass: c.bass }; }), out = [];
     if (level === 1) return cs.map(function (c) { var q = upgrade(c.q, mod(c.r - key.t, 12), key.minor); return { r: c.r, q: q, b: c.b }; });
     if (level === 2) {
@@ -4081,6 +4121,123 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     return cs;
   }
 
+  /* ---------- Zufall mit Startwert (gleicher Song = gleiche Melodie) ---------- */
+  function rng(seed) { var x = (seed >>> 0) || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
+  function pick(r, arr) { return arr[Math.floor(r() * arr.length)]; }
+
+  /* ---------- Melodie: eine singbare Linie über den Akkorden (Motiv, Wiederholung, Schluss) ---------- */
+  // Rhythmus-Zellen für 2 Takte in Achteln: [Start, Dauer]
+  var CELLS = {
+    lyr: [[[0, 2], [2, 2], [4, 1], [5, 3], [8, 6]], [[0, 3], [3, 1], [4, 4], [8, 2], [10, 2], [12, 4]], [[2, 2], [4, 2], [6, 2], [8, 6], [14, 2]]],
+    pop: [[[1, 1], [2, 2], [4, 1], [5, 3], [8, 1], [9, 1], [10, 2], [12, 4]], [[0, 2], [2, 1], [3, 3], [6, 2], [8, 4], [12, 2], [14, 2]], [[2, 1], [3, 1], [4, 2], [6, 2], [8, 3], [11, 1], [12, 4]]],
+    lofi: [[[0, 3], [3, 1], [4, 4], [10, 1], [11, 1], [12, 4]], [[1, 1], [2, 3], [6, 2], [8, 6]], [[0, 2], [3, 1], [4, 4], [9, 1], [10, 2], [12, 4]]],
+    jazz: [[[0, 1], [1, 1], [2, 1], [3, 1], [4, 2], [6, 1], [7, 3], [10, 2], [12, 3]], [[1, 1], [2, 1], [3, 2], [5, 1], [6, 2], [8, 4], [13, 1], [14, 2]], [[0, 2], [2, 1], [3, 1], [4, 1], [5, 3], [8, 1], [9, 1], [10, 1], [11, 3]]],
+    bossa: [[[0, 3], [3, 3], [6, 2], [8, 3], [11, 3], [14, 2]], [[0, 2], [2, 1], [3, 3], [6, 2], [8, 6]], [[1, 2], [3, 3], [6, 2], [8, 4], [12, 4]]]
+  };
+  var CAD = [[[0, 2], [2, 2], [4, 2], [6, 2], [8, 8]], [[0, 3], [3, 1], [4, 4], [8, 8]], [[0, 1], [1, 1], [2, 2], [4, 4], [8, 8]]];
+  var CELLSET = { pop: 'pop', ballad: 'lyr', lofi: 'lofi', neosoul: 'lofi', jazz: 'jazz', bossa: 'bossa' };
+  // Tonleiter für einen Akkord: Tonart, aber mit den Akkordtönen (z. B. Gis über E7 in C-Dur)
+  function chordScale(key, c) {
+    var sc = scale(key).map(function (x) { return mod(key.t + x, 12); }), ct = tones(key, c).map(function (t) { return t.pc; });
+    var out = sc.map(function (p) { for (var i = 0; i < ct.length; i++) if (mod(ct[i] - p, 12) === 1 || mod(p - ct[i], 12) === 1) { if (sc.indexOf(ct[i]) < 0) return ct[i]; } return p; });
+    ct.forEach(function (p) { if (out.indexOf(p) < 0) out.push(p); });
+    return out.sort(function (a, b) { return a - b; });
+  }
+  function timeline(chords) { var t = 0; return chords.map(function (c, i) { var o = { t: t, b: c.b || 4, c: c, i: i }; t += o.b; return o; }); }
+  function chordAt(tl, beat) { var r = tl[0]; for (var i = 0; i < tl.length; i++) if (tl[i].t <= beat + 1e-6) r = tl[i]; return r; }
+  function sections(chords) {
+    var out = [], tl = timeline(chords);
+    tl.forEach(function (x) { var s = x.c.sec || ''; if (!out.length || out[out.length - 1].name !== s) out.push({ name: s, t: x.t, end: x.t + x.b, from: x.i, to: x.i }); else { out[out.length - 1].end = x.t + x.b; out[out.length - 1].to = x.i; } });
+    return out;
+  }
+  function melody(song) {
+    var key = song.key, style = song.style || 'pop', tl = timeline(song.chords), notes = [];
+    var cs = CELLS[CELLSET[style] || 'pop'];
+    sections(song.chords).forEach(function (sec, si) {
+      if (/Intro|Outro/.test(sec.name)) return;
+      var r = rng((song.melSeed || 1) * 7919 + (/Refrain/.test(sec.name) ? 31 : 17) + (sec.name ? 0 : si)), lift = /Refrain/.test(sec.name) ? 4 : 0;
+      var center = 74 + lift, lo = 69 + Math.min(2, lift), hi = 81 + lift;
+      var bars = Math.floor((sec.end - sec.t) / 4), cell = pick(r, cs), cad = pick(r, CAD);
+      var contour = cell.map(function () { return pick(r, [-2, -1, -1, 1, 1, 2, 0, 3, -3]); });
+      var prev = null, units = Math.ceil(bars / 2);
+      for (var u = 0; u < units; u++) {
+        var isCad = u === units - 1 && units > 1, cl = isCad ? cad : cell, shift = (u % 4 === 1) ? 1 : (u % 4 === 2 ? 0 : (u % 4 === 3 ? -1 : 0));
+        var base = sec.t + u * 8;
+        cl.forEach(function (nn, k) {
+          var tb = base + nn[0] / 2, d = nn[1] / 2;
+          if (tb >= sec.end - 1e-6) return;
+          if (tb + d > sec.end) d = sec.end - tb;
+          var ch = chordAt(tl, tb), sc = chordScale(key, ch.c), ct = tones(key, ch.c).map(function (t) { return t.pc; });
+          var strong = Math.abs(tb - Math.round(tb)) < 1e-6 && (mod(Math.round(tb), 2) === 0 || Math.abs(tb - ch.t) < 1e-6) || d >= 1.5;
+          var m;
+          if (prev == null || (k === 0 && u % 2 === 0)) {
+            // Phrasenbeginn: Akkordton nahe der Mitte (bei Wiederholung leicht versetzt)
+            m = nearest(center + shift * 2, ct.filter(function (p) { return p !== mod(ch.c.r, 12) || r() < 0.3; }));
+          } else {
+            var steps = isCad ? (k === cl.length - 1 ? 0 : pick(r, [-1, 1, -1])) : contour[k % contour.length] + (u % 2 === 1 && k === 0 ? shift : 0);
+            m = stepScale(prev, steps, sc);
+            if (strong) m = nearest(m, ct);
+          }
+          if (isCad && k === cl.length - 1) { // Schlusston: Grundton oder Terz des Akkords
+            var goal = [mod(ch.c.r, 12)], t3 = ivOf(ch.c.q, 3); if (t3 != null) goal.push(mod(ch.c.r + t3, 12));
+            m = nearest(prev != null ? prev : center, goal);
+          }
+          while (m > hi) m -= 12; while (m < lo) m += 12;
+          if (prev != null && Math.abs(m - prev) > 9) m += m > prev ? -12 : 12;
+          if (m > hi + 2 || m < lo - 2) m = nearest(center, ct);
+          notes.push({ t: tb, d: d, m: m, v: (strong ? 0.78 : 0.68) + (lift ? 0.06 : 0), sec: sec.name });
+          prev = m;
+        });
+      }
+    });
+    return notes;
+    function nearest(m, pcs) { var best = m, bd = 99; for (var dd = 0; dd <= 7; dd++) { [m + dd, m - dd].forEach(function (x) { if (bd === 99 && pcs.indexOf(mod(x, 12)) >= 0) { best = x; bd = dd; } }); if (bd !== 99) break; } return best; }
+    function stepScale(m, n, sc) {
+      if (!n) return m;
+      var x = m, dir = n > 0 ? 1 : -1, left = Math.abs(n);
+      while (left > 0) { x += dir; if (sc.indexOf(mod(x, 12)) >= 0) left--; }
+      return x;
+    }
+  }
+
+  /* ---------- Ganzer Song: Intro, Strophe, Refrain, Outro ---------- */
+  function richTonic(key, style) { return key.minor ? (style === 'pop' ? 'm' : 'm9') : (style === 'pop' ? 'add9' : style === 'ballad' ? 'add9' : style === 'jazz' || style === 'bossa' ? '6/9' : 'maj9'); }
+  function bars8(ch) { var b = ch.reduce(function (s, c) { return s + c.b; }, 0); var out = ch.map(function (c) { return { r: c.r, q: c.q, b: c.b }; }); while (b < 32) { ch.forEach(function (c) { if (b < 32) { out.push({ r: c.r, q: c.q, b: c.b }); b += c.b; } }); } return out; }
+  // Song aus Strophe und Refrain zusammensetzen (Intro = Ende des Refrains, Outro mit Moll-Subdominante und reichem Schlussakkord)
+  function buildSong(key, style, verse, chorus) {
+    verse = bars8(verse); chorus = bars8(chorus);
+    var intro = lastBars(chorus, 4), fin = { r: key.t, q: richTonic(key, style), b: 4, fin: true };
+    var outro = lastBars(chorus, 2).concat([{ r: mod(key.t + (key.minor ? 8 : 5), 12), q: key.minor ? (RICH[style] ? 'maj7' : '') : (RICH[style] ? 'm6' : 'm'), b: 4 }, fin]);
+    function tag(list, name) { return list.map(function (c) { return { r: c.r, q: c.q, b: c.b, sec: name, fin: c.fin }; }); }
+    return tag(intro, 'Intro').concat(tag(verse, 'Strophe'), tag(chorus, 'Refrain'), tag(outro, 'Outro'));
+  }
+  function genSong(key, style, seed) {
+    var r = rng(seed || Date.now()), set = (IDEAS[style] || IDEAS.pop)[key.minor ? 'min' : 'maj'];
+    var vi = Math.floor(r() * set.length), ci = (vi + 1 + Math.floor(r() * Math.max(1, set.length - 1))) % set.length;
+    // Refrain: lieber eine Folge, die nicht auf der Tonika beginnt (hebt ab)
+    for (var k = 0; k < set.length && set.length > 2; k++) { var cand = (ci + k) % set.length; if (cand !== vi && !/^I:/.test(set[cand][0])) { ci = cand; break; } }
+    var verse = fromIdea(key, set[vi]), chorus = bars8(fromIdea(key, set[ci]));
+    if (RICH[style] >= 2) chorus = jazzify(key, chorus, 1);
+    return { chords: buildSong(key, style, verse, chorus), vi: vi, ci: ci };
+  }
+  function lastBars(ch, n) { var out = [], b = 0; for (var i = ch.length - 1; i >= 0 && b < n * 4; i--) { out.unshift({ r: ch[i].r, q: ch[i].q, b: ch[i].b }); b += ch[i].b; } return out; }
+
+  /* ---------- Sammlung: besonders schöne Akkordfolgen ---------- */
+  var LIB = [
+    { id: 'royal', name: 'Royal Road', style: 'neosoul', d: 'Die sehnsüchtige Folge aus Anime- und J-Pop-Balladen', key: { t: 0, minor: false }, p: ['IV:maj7', 'V:7', 'III:m7', 'VI:m7', 'II:m7', 'V:7sus4+V:7', 'I:maj9', 'I:maj9'] },
+    { id: 'night', name: 'Lo-Fi Nacht', style: 'lofi', d: 'Weich, verträumt, zum Zurücklehnen', key: { t: 5, minor: false }, p: ['IV:maj9', 'III:m7', 'VI:m9', 'I:maj9', 'IV:maj9', 'IV:m6', 'III:m7', 'VI:7b9'] },
+    { id: 'gospel', name: 'Gospel-Gänsehaut', style: 'ballad', d: 'Aufsteigender Bass, warme Auflösung', key: { t: 3, minor: false }, p: ['I:', 'I:7', 'IV:', '#IV:dim7', 'I:', 'VI:7', 'II:m7+V:7', 'I:add9'] },
+    { id: 'tears', name: 'Moll-Melancholie', style: 'ballad', d: 'Dramatisch, wie Filmmusik', key: { t: 9, minor: true }, p: ['I:m', 'bVI:maj7', 'bIII:', 'bVII:', 'IV:m', 'bVI:', 'V:sus4+V:', 'I:m'] },
+    { id: 'twoofus', name: 'Großstadt-Groove', style: 'neosoul', d: 'Die berühmte absteigende Neo-Soul-Folge in Moll', key: { t: 4, minor: true }, p: ['bVI:maj7', 'V:7', 'I:m7', 'I:m7', 'bVI:maj7', 'V:7', 'I:m7', 'IV:m9'] },
+    { id: 'autumn', name: 'Herbst-Jazz', style: 'jazz', d: 'Klassische Jazz-Kadenzen in Dur und Moll', key: { t: 7, minor: true }, p: ['IV:m7', 'bVII:7', 'bIII:maj7', 'bVI:maj7', 'II:m7b5', 'V:7b9', 'I:m6', 'I:m6'] },
+    { id: 'ipanema', name: 'Strand bei Rio', style: 'bossa', d: 'Bossa nova mit schwebenden Dominanten', key: { t: 5, minor: false }, p: ['I:maj7', 'I:maj7', 'II:9', 'II:9', 'II:m9', 'bII:7', 'I:6/9', 'bII:7'] },
+    { id: 'turn', name: 'Jazz-Turnaround', style: 'jazz', d: 'I – VI – II – V mit Farben, endlos schön', key: { t: 10, minor: false }, p: ['I:maj9+VI:7b9', 'II:m9+V:13', 'III:m7+VI:7', 'II:m9+V:7alt'] },
+    { id: 'epic', name: 'Hymne', style: 'pop', d: 'Große Gefühle, Stadion-Refrain', key: { t: 2, minor: false }, p: ['VI:m', 'IV:', 'I:', 'V:', 'VI:m', 'IV:', 'I:', 'V:sus4+V:'] },
+    { id: 'soulful', name: 'Sonntagmorgen', style: 'neosoul', d: 'Satte Septimen, entspannter Groove', key: { t: 1, minor: false }, p: ['II:m9', 'III:m7', 'IV:maj9', 'V:9sus4', 'II:m9', 'III:m7+VI:7#9', 'II:m9', 'V:13'] }
+  ];
+  function fromLib(e) { return fromIdea(e.key, e.p); }
+  function libSong(e) { var p = fromLib(e); return buildSong(e.key, e.style, p, p); }
+
   /* ---------- Begleitung: Rhythmus der rechten Hand, Bass, Schlagzeug ---------- */
   // Muster in Vierteln je Takt: [Start, Dauer, Stärke]
   var COMP = {
@@ -4118,48 +4275,85 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     else { n(0, 1.4, r0, 0.85); n(1.5, 0.4, r0, 0.6); n(2, 1.4, r0 + fifth > 47 ? r0 + fifth - 12 : r0 + fifth, 0.75); n(3.5, 0.4, r0, 0.6); }
     return out;
   }
-  // gesamter Ablauf als Ereignisliste (Zeit in Vierteln): { t, d, m, v, part: 'rh'|'lh'|'bass' } und { t, drum, v }
+  // gesamter Ablauf als Ereignisliste (Zeit in Vierteln): { t, d, m, v, part: 'rh'|'lh'|'bass'|'mel', roll } und { t, drum, v }
+  // Mit Teilen (Intro/Strophe/Refrain/Outro) bekommt jeder Teil seine eigene Stärke: Intro zart, Refrain voll, Schlussakkord gebrochen
+  var PROF = {
+    Intro: { pat: 'arp', drums: 0, bass: 0, mel: 0, vel: 0.85 },
+    Strophe: { drums: 1, bass: 1, mel: 1, vel: 0.92 },
+    Refrain: { drums: 2, bass: 1, mel: 1, vel: 1.06, oct: true },
+    Outro: { pat: 'arp', drums: 0, bass: 0, mel: 0, vel: 0.8 },
+    '': { drums: 2, bass: 1, mel: 1, vel: 1 }
+  };
+  var LIGHT = { snare: 'rim', ride: 'ride', hat: 'hat', kick: 'kick', hatf: 'hatf', rim: 'rim', shaker: 'shaker' };
   function arrange(song, opts) {
     opts = opts || {};
-    var style = song.style || 'pop', st = STYLES[style], vs = voiceAll(song.chords, style), ev = [], t = 0, prevB = null, bar = 0;
-    var swing = st.swing, sw16 = st.sw16;
-    function swingT(x) { // x in Vierteln (absolut)
+    var style = song.style || 'pop', st = STYLES[style], melOn = opts.melody !== false && song.mel !== false, mel = melOn ? melody(song) : [];
+    var vs = voiceAll(song.chords, style, melOn && mel.length ? { top: 74, center: 64, n: 3 } : null), ev = [], t = 0, prevB = null;
+    var swing = st.swing, sw16 = st.sw16, R = rng((song.melSeed || 1) * 131 + 7), hasSec = song.chords.some(function (c) { return c.sec; });
+    function swingT(x) {
       var beat = Math.floor(x + 1e-6), f = x - beat;
       if (Math.abs(f - 0.5) < 1e-3 && swing > 0.5) return beat + swing;
       if (sw16 > 0.5) { if (Math.abs(f - 0.25) < 1e-3) return beat + sw16 * 0.5; if (Math.abs(f - 0.75) < 1e-3) return beat + 0.5 + sw16 * 0.5; }
       return x;
     }
-    var pat = COMP[style], pi = 0, cIdx = [];
+    function hv(v) { return Math.max(0.12, Math.min(1, v + (R() - 0.5) * 0.08)); } // menschlich: kleine Unterschiede
+    var pat = COMP[style], pi = 0, cIdx = [], legato = style === 'ballad' || style === 'neosoul' || style === 'lofi';
     song.chords.forEach(function (c, i) {
-      var v = vs[i], nx = song.chords[(i + 1) % song.chords.length], beats = c.b || 4;
+      var v = vs[i], nx = song.chords[(i + 1) % song.chords.length], beats = c.b || 4, pr = PROF[c.sec || ''] || PROF[''];
+      var last = hasSec && i === song.chords.length - 1, vel = pr.vel;
       cIdx.push({ t: t, d: beats, i: i });
-      // linke Hand (Klavier): leise Stütze, wenn der Bass spielt
-      v.lh.forEach(function (m, k) { ev.push({ t: t, d: beats * 0.95, m: m + (opts.bass && k === 0 ? 12 : 0), v: opts.bass ? 0.32 : 0.55, part: 'lh', ci: i }); });
-      if (pat === 'arp') {
-        var arp = [v.lh[1]].concat(v.rh), step = 0.5;
-        for (var x = 0, j = 0; x < beats - 1e-6; x += step, j++) { var m = j < arp.length ? arp[j] : arp[arp.length - 1 - ((j - arp.length) % Math.max(1, arp.length - 1)) - 1] || arp[0]; ev.push({ t: t + x, d: beats - x, m: m, v: 0.42 + (j === 0 ? 0.1 : 0), part: 'rh', ci: i }); }
+      var bassOn = opts.bass && pr.bass;
+      if (last || c.fin) {
+        // Schlussakkord: von unten nach oben gebrochen, lange klingen lassen
+        var all = v.lh.concat(v.rh, [v.rh[v.rh.length - 1] + (mod(v.rh[v.rh.length - 1] - c.r, 12) === 0 ? 4 : 0) + 12 > 88 ? v.rh[0] + 12 : v.rh[v.rh.length - 2] + 12]);
+        all.forEach(function (m, k) { ev.push({ t: t + k * 0.12, d: beats + 4 - k * 0.12, m: m, v: hv(0.5 + (k === all.length - 1 ? 0.12 : 0)), part: k < v.lh.length ? 'lh' : 'rh', ci: i }); });
+        if (opts.bass) ev.push({ t: t, d: beats + 3, m: lowRoot(c.r) - 12 < 28 ? lowRoot(c.r) : lowRoot(c.r) - 12, v: 0.7, part: 'bass', ci: i });
+        t += beats; return;
+      }
+      v.lh.forEach(function (m, k) { ev.push({ t: t, d: (legato ? beats : beats * 0.95), m: m + (bassOn && k === 0 ? 12 : 0), v: hv((bassOn ? 0.34 : 0.55) * vel), part: 'lh', ci: i }); });
+      var p = pr.pat || pat;
+      if (p === 'arp') {
+        var arp = v.lh.slice(1).concat(v.rh), step = beats >= 4 && style !== 'ballad' ? 0.5 : 0.5;
+        var up = arp.concat(arp.slice(1, -1).reverse());
+        for (var x = 0, j = 0; x < beats - 1e-6; x += step, j++) { var m = up[j % up.length]; ev.push({ t: t + x, d: beats - x, m: m, v: hv((0.4 + (j === 0 ? 0.08 : 0)) * vel), part: 'rh', ci: i }); }
       } else {
-        var bars = Math.max(1, Math.round(beats / 4)), p = pat[(pi++) % pat.length];
-        if (beats < 4) p = [[0, beats * 0.8, 0.65]].concat(style === 'jazz' || style === 'bossa' ? [] : []);
-        p.forEach(function (h) {
+        var pp = p[(pi++) % p.length];
+        if (beats < 4) pp = [[0, beats, 0.65]];
+        pp.forEach(function (h) {
           if (h[0] >= beats) return;
-          var d = Math.min(h[1], beats - h[0]);
-          v.rh.forEach(function (m) { ev.push({ t: swingT(t + h[0]), d: d * 0.95, m: m, v: h[2], part: 'rh', ci: i }); });
+          var d = legato ? beats - h[0] : Math.min(h[1], beats - h[0]);
+          v.rh.forEach(function (m, k) { ev.push({ t: swingT(t + h[0]), d: d * 0.95, m: m, v: hv(h[2] * vel * (melOn ? 0.85 : 1)), part: 'rh', ci: i, roll: k }); });
         });
       }
-      if (opts.bass) bassLine(style, c, nx, beats, prevB).forEach(function (b) { ev.push({ t: swingT(t + b.b), d: b.d, m: b.m, v: b.v, part: 'bass', ci: i }); prevB = b.m; });
+      if (bassOn) bassLine(style, c, nx, beats, prevB).forEach(function (b) { ev.push({ t: swingT(t + b.b), d: b.d, m: b.m, v: hv(b.v), part: 'bass', ci: i }); prevB = b.m; });
       t += beats;
     });
-    var total = t;
+    var total = t + (hasSec ? 4 : 0);
+    // Melodie (im Refrain mit Oktave darunter – klingt groß)
+    mel.forEach(function (n) {
+      var pr = PROF[n.sec || ''] || PROF[''];
+      if (!pr.mel) return;
+      ev.push({ t: swingT(n.t), d: n.d * 0.97, m: n.m, v: hv(n.v * (pr.vel > 1 ? 1.05 : 1)), part: 'mel' });
+      if (pr.oct && n.d >= 0.5) ev.push({ t: swingT(n.t), d: n.d * 0.97, m: n.m - 12, v: hv(n.v * 0.55), part: 'mel' });
+    });
+    // Schlagzeug je Teil; Fill vor dem Refrain, Becken beim Einsatz
     if (opts.drums && DRUMS[style]) {
-      var D = DRUMS[style];
-      for (var b0 = 0; b0 < total; b0 += 4) Object.keys(D).forEach(function (inst) {
-        var s = D[inst];
-        for (var k = 0; k < 16; k++) { var ch = s[k]; if (ch === '.' || b0 + k / 4 >= total) continue; ev.push({ t: swingT(b0 + k / 4), drum: inst, v: ch === 'X' ? 1 : ch === 'x' ? 0.75 : 0.4 }); }
+      var D = DRUMS[style], secs = sections(song.chords);
+      secs.forEach(function (sc, si) {
+        var pr = PROF[sc.name || ''] || PROF[''];
+        if (!pr.drums) return;
+        for (var b0 = sc.t; b0 < sc.end - 1e-6; b0 += 4) Object.keys(D).forEach(function (inst) {
+          var s = D[inst], name = pr.drums === 1 ? LIGHT[inst] : inst, scale = pr.drums === 1 ? 0.7 : 1;
+          if (pr.drums === 1 && inst === 'kick' && style !== 'jazz') s = s.replace(/x(?=.......$)/, '.'); // Strophe: sparsamer
+          for (var k = 0; k < 16; k++) { var ch = s[k]; if (ch === '.' || b0 + k / 4 >= sc.end) continue; ev.push({ t: swingT(b0 + k / 4), drum: name, v: (ch === 'X' ? 1 : ch === 'x' ? 0.75 : 0.4) * scale }); }
+        });
+        var nxs = secs[si + 1];
+        if (nxs && /Refrain/.test(nxs.name) && style !== 'ballad') for (var f = 0; f < 4; f++) ev.push({ t: sc.end - 1 + f * 0.25, drum: 'snare', v: 0.45 + f * 0.15 });
+        if (/Refrain/.test(sc.name)) ev.push({ t: sc.t, drum: 'crash', v: 0.8 });
       });
     }
     ev.sort(function (a, b) { return a.t - b.t; });
-    return { ev: ev, total: total, chords: cIdx, voicings: vs };
+    return { ev: ev, total: total, chords: cIdx, voicings: vs, melody: mel, once: hasSec };
   }
 
   /* ---------- Export als Noten (ABC) zum Üben in Tasto ---------- */
@@ -4186,27 +4380,56 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
   }
   function label(key, c, m) { var sp = spellMidi(key, c, m); return noteName(sp.l, sp.a) + (Math.floor((m - sp.a) / 12) - 1); }
   function len(b) { return b === 1 ? '' : b === 0.5 ? '/' : String(b); }
-  function toAbc(song) {
-    var key = song.key, ka = keyAlter(key), vs = voiceAll(song.chords, song.style || 'pop'), R = [], L = [], barR = {}, barL = {}, pos = 0;
-    var nameLine = [];
-    song.chords.forEach(function (c, i) {
-      var v = vs[i], b = c.b || 4;
-      var rh = v.rh.map(function (m) { var s = spellMidi(key, c, m); return abcPitch(m, s.l, s.a, ka, barR); });
-      var lh = v.lh.map(function (m) { var s = spellMidi(key, c, m); return abcPitch(m, s.l, s.a, ka, barL); });
-      R.push('"' + chordName(key, c).replace(/"/g, '') + '"[' + rh.join('') + ']' + len(b));
-      L.push('[' + lh.join('') + ']' + len(b));
-      pos += b; nameLine.push(chordName(key, c));
-      if (pos % 4 === 0) { R.push('|'); L.push('|'); barR = {}; barL = {}; }
+  var PARTS8 = [8, 6, 4, 3, 2, 1];
+  function split8(n) { var out = []; while (n > 0) { for (var i = 0; i < PARTS8.length; i++) if (PARTS8[i] <= n) { out.push(PARTS8[i]); n -= PARTS8[i]; break; } } return out; }
+  // mode 'chords': Akkorde als Blöcke (Begleitung lernen); mode 'song': Melodie oben, Akkord darunter beim Akkordwechsel, links die Begleitung
+  function toAbc(song, mode) {
+    var key = song.key, ka = keyAlter(key), withMel = mode === 'song', mel = withMel ? melody(song) : [];
+    var vs = voiceAll(song.chords, song.style || 'pop', withMel && mel.length ? { top: 74, center: 64, n: 3 } : null);
+    var tl = timeline(song.chords), R = [], L = [], barR = {}, barL = {}, posR = 0, posL = 0;
+    function spell(c, m) { var sp = spellMidi(key, c, m); return sp; }
+    function emit(arr, bar, pos, ms, n8, c, sym, isL) {
+      // ms: MIDI-Liste (leer = Pause); n8: Achtel; teilt an erlaubten Längen mit Haltebögen
+      var parts = split8(n8), str = [];
+      parts.forEach(function (pn, k) {
+        var head = k === 0 && sym ? '"' + sym.replace(/"/g, '') + '"' : '';
+        if (!ms.length) str.push(head + 'z' + len(pn));
+        else {
+          var ps = ms.map(function (m) { var sp = spell(c, m); return abcPitch(m, sp.l, sp.a, ka, bar); });
+          str.push(head + (ps.length > 1 ? '[' + ps.join('') + ']' : ps[0]) + len(pn) + (k < parts.length - 1 ? '-' : ''));
+        }
+      });
+      arr.push(str.join(' '));
+      return pos + n8;
+    }
+    function barCheck(arr, pos, which) { if (pos % 8 === 0) { arr.push('|'); if (which === 'R') barR = {}; else barL = {}; } }
+    tl.forEach(function (x) {
+      var c = x.c, v = vs[x.i], cs = x.t * 2, ce = (x.t + x.b) * 2, sym = chordName(key, c);
+      // linke Hand: Begleitung als Block
+      posL = emit(L, barL, posL, v.lh, ce - cs, c, null, true); barCheck(L, posL, 'L');
+      var mine = mel.filter(function (n) { return n.t * 2 >= cs - 1e-6 && n.t * 2 < ce - 1e-6; });
+      if (!mine.length) { posR = emit(R, barR, posR, v.rh, ce - cs, c, sym); barCheck(R, posR, 'R'); return; }
+      var cur = cs, first = true;
+      mine.forEach(function (n) {
+        var ns = Math.round(n.t * 2), ne = Math.min(ce, Math.round((n.t + n.d) * 2));
+        if (ne <= ns) return;
+        if (ns > cur) { posR = emit(R, barR, posR, cur === cs ? v.rh : [], ns - cur, c, first ? sym : null); first = false; }
+        var under = ns === cs ? v.rh.filter(function (m) { return m < n.m - 2; }).slice(-3) : [];
+        posR = emit(R, barR, posR, under.concat([n.m]), ne - ns, c, first ? sym : null); first = false;
+        cur = ne;
+      });
+      if (cur < ce) posR = emit(R, barR, posR, [], ce - cur, c, null);
+      barCheck(R, posR, 'R');
     });
-    var lines = ['X:1', 'T:' + (song.title || 'Mein Song'), 'C:Tasto Studio · ' + STYLES[song.style || 'pop'].name, 'M:4/4', 'L:1/4', 'Q:1/4=' + Math.round(song.bpm || 90), 'K:' + keyAbc(key),
-      'V:R clef=treble', R.join(' ').replace(/\|$/, '|]'), 'V:L clef=bass', L.join(' ').replace(/\|$/, '|]')];
+    var lines = ['X:1', 'T:' + (song.title || 'Mein Song') + (mode === 'song' ? '' : ' – Akkorde'), 'C:Tasto Studio · ' + STYLES[song.style || 'pop'].name, 'M:4/4', 'L:1/8', 'Q:1/4=' + Math.round(song.bpm || 90), 'K:' + keyAbc(key),
+      'V:R clef=treble', R.join(' ').replace(/\|\s*$/, '|]'), 'V:L clef=bass', L.join(' ').replace(/\|\s*$/, '|]')];
     return lines.join('\n');
   }
 
   return {
     Q: Q, QLIST: QLIST, STYLES: STYLES, IDEAS: IDEAS, sym: sym, keyName: keyName, keyAbc: keyAbc, tonic: tonic, noteName: noteName,
     spellRoot: spellRoot, tones: tones, chordName: chordName, roman: roman, diatonic: diatonic, colors: colors,
-    voicing: voicing, voiceAll: voiceAll, idea: idea, fromIdea: fromIdea, jazzify: jazzify, arrange: arrange, bassLine: bassLine, toAbc: toAbc, label: label, isMinorQ: isMinorQ, mod: mod
+    voicing: voicing, voiceAll: voiceAll, idea: idea, fromIdea: fromIdea, jazzify: jazzify, arrange: arrange, bassLine: bassLine, toAbc: toAbc, label: label, melody: melody, genSong: genSong, LIB: LIB, fromLib: fromLib, libSong: libSong, buildSong: buildSong, sections: sections, rng: rng, isMinorQ: isMinorQ, mod: mod
   };
 });
 
@@ -4852,7 +5075,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '6.9', VERSION_DATE = '01.11.2026';
+  var VERSION = '7.0', VERSION_DATE = '01.11.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -5708,7 +5931,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       });
       if (!S.introSeen) setTimeout(showIntro, 300);
       else if (!S.cal && !setupAsked) { setupAsked = true; setTimeout(setupPrompt, 350); }
-      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Version ' + VERSION + ': Neu – das Studio zum Komponieren mit Akkorden', 5000); }, 400);
+      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Version ' + VERSION + ': Studio baut ganze Songs mit Melodie – und bringt sie dir bei', 5000); }, 400);
       if (S.lastVersion !== VERSION) { S.lastVersion = VERSION; saveSettings(); }
     });
   }
@@ -6978,13 +7201,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   function studioCard() {
     return el('button', { class: 'read-card studio-card', onclick: function () { showStudio(); } }, [
       el('div', { class: 'rc-ic' }, [icon('spark')]),
-      el('div', { class: 'rc-t' }, [el('span', { class: 'k', text: 'Studio · komponieren' }), el('b', { text: Studio.songs.length ? Studio.songs.length + (Studio.songs.length === 1 ? ' eigener Song' : ' eigene Songs') : 'Eigene Songs mit Akkorden bauen' }),
-        el('span', { class: 'rc-s', text: 'Pop, Lo-Fi, Neo-Soul, Jazz, Bossa – mit Beat und Bass' })]),
+      el('div', { class: 'rc-t' }, [el('span', { class: 'k', text: 'Studio · komponieren' }), el('b', { text: Studio.songs.length ? Studio.songs.length + (Studio.songs.length === 1 ? ' eigener Song' : ' eigene Songs') : 'Schöne Songs bauen und lernen' }),
+        el('span', { class: 'rc-s', text: 'Ganze Songs mit Melodie, Beat und Bass – und Tasto bringt sie dir bei' })]),
       icon('chevr')]);
   }
-  function newSong(style, key) {
-    var id = PH.idea(key, style, -1);
-    var s = { id: uid(), title: 'Song ' + (Studio.songs.length + 1), style: style, key: key, bpm: PH.STYLES[style].bpm, chords: id.chords, ideaN: id.n, jazz: 0, created: Date.now(), mix: { piano: true, bass: true, drums: true } };
+  var SONG_NAMES = ['Mitternacht', 'Goldene Stunde', 'Rheinufer', 'Sternenstaub', 'Nachtfahrt', 'Erste Liebe', 'Regen auf Glas', 'Sommerende', 'Kölner Lichter', 'Morgengrauen', 'Fernweh', 'Stille Straßen', 'Blaue Stunde', 'Herzschlag', 'Wolkenlos', 'Spätsommer'];
+  function newSong(style, key, lib) {
+    var seed = (Date.now() % 100000) + 1, g = lib ? { chords: PH.libSong(lib) } : PH.genSong(key, style, seed);
+    var title = lib ? lib.name : SONG_NAMES[(Studio.songs.length + seed) % SONG_NAMES.length];
+    var s = { id: uid(), title: title, style: lib ? lib.style : style, key: lib ? { t: lib.key.t, minor: lib.key.minor } : key, bpm: PH.STYLES[lib ? lib.style : style].bpm, chords: g.chords, melSeed: seed % 997 + 1, jazz: 0, created: Date.now(), mix: { piano: true, bass: true, drums: true, mel: true } };
     Studio.songs.unshift(s); saveStudio(); return s;
   }
   function showStudio() {
@@ -7006,7 +7231,16 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         grid.appendChild(el('button', { class: 'style-tile st-' + st, onclick: function () { Snd.resume(); var s = newSong(st, { t: key.t, minor: key.minor }); editSong(s); } }, [el('b', { text: S0.name }), el('span', { text: S0.desc })]));
       });
       view.appendChild(el('h2', { class: 'sh-h', text: 'Neuer Song' }));
+      view.appendChild(el('p', { class: 'hint sh-sub', text: 'Tasto baut dir einen ganzen Song: Intro, Strophe, Refrain und Schluss – mit Melodie, vollen Akkorden, Bass und Beat.' }));
       view.appendChild(grid);
+      view.appendChild(el('h2', { class: 'sh-h', text: 'Besonders schöne Akkordfolgen' }));
+      var libEl = el('div', { class: 'lib-grid' });
+      PH.LIB.forEach(function (e) {
+        var names = PH.fromLib(e).slice(0, 4).map(function (c) { return PH.chordName(e.key, c); }).join(' · ');
+        libEl.appendChild(el('button', { class: 'lib-tile', onclick: function () { Snd.resume(); editSong(newSong(null, null, e)); } }, [
+          el('span', { class: 'lt-st st-' + e.style, text: PH.STYLES[e.style].name }), el('b', { text: e.name }), el('span', { class: 'lt-d', text: e.d }), el('span', { class: 'lt-c', text: names + ' …' })]));
+      });
+      view.appendChild(libEl);
       if (Studio.songs.length) {
         view.appendChild(el('h2', { class: 'sh-h', text: 'Deine Songs' }));
         var list = el('div', { class: 'path-list' });
@@ -7051,6 +7285,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         else if (inst === 'ride') { nz(c, out, t, 'bandpass', 6500, 1.5, 0.14 * k, 0.45); tone(c, out, t, 'square', 3200, 0, 0.012 * k, 0.3); }
         else if (inst === 'rim') { tone(c, out, t, 'square', 1700, 0, 0.06 * k, 0.03); nz(c, out, t, 'bandpass', 3000, 2, 0.15 * k, 0.03); }
         else if (inst === 'shaker') nz(c, out, t, 'highpass', 5200, 0.9, 0.07 * k, 0.07);
+        else if (inst === 'crash') { nz(c, out, t, 'highpass', 4200, 0.6, 0.22 * k, 1.6); nz(c, out, t, 'bandpass', 8000, 1.2, 0.08 * k, 0.9); }
       },
       bass: function (c, out, m, t, d, v) {
         var f = S.a4 * Math.pow(2, (m - 69) / 12), o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
@@ -7066,7 +7301,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   function editSong(song) {
     go(function () {
       var sel = 0, undo = [], playing = null, raf = 0, curPlay = -1;
-      song.mix = song.mix || { piano: true, bass: true, drums: true };
+      song.mix = song.mix || { piano: true, bass: true, drums: true }; if (song.mix.mel == null) song.mix.mel = true; song.melSeed = song.melSeed || 1;
       var view = el('div', { class: 'view scroll studio' });
       var titleIn = el('input', { class: 'sd-title', value: song.title, 'aria-label': 'Titel' });
       titleIn.addEventListener('change', function () { song.title = titleIn.value.trim() || 'Mein Song'; save(); });
@@ -7081,7 +7316,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       var bpmOut = el('output');
       var bpmStep = el('div', { class: 'step' }, [el('button', { 'aria-label': 'Langsamer', text: '−', onclick: function () { song.bpm = Math.max(50, song.bpm - 4); save(); render(); } }), bpmOut, el('button', { 'aria-label': 'Schneller', text: '+', onclick: function () { song.bpm = Math.min(200, song.bpm + 4); save(); render(); } })]);
       var mixRow = el('div', { class: 'chips mix' });
-      [['piano', 'Klavier'], ['bass', 'Bass'], ['drums', 'Beat']].forEach(function (o) { mixRow.appendChild(el('button', { class: 'chip tog', 'data-mx': o[0], onclick: function () { song.mix[o[0]] = !song.mix[o[0]]; save(); render(); restartIfPlaying(); } }, [o[1]])); });
+      [['mel', 'Melodie'], ['piano', 'Klavier'], ['bass', 'Bass'], ['drums', 'Beat']].forEach(function (o) { mixRow.appendChild(el('button', { class: 'chip tog', 'data-mx': o[0], onclick: function () { song.mix[o[0]] = !song.mix[o[0]]; save(); render(); restartIfPlaying(); } }, [o[1]])); });
       view.appendChild(styleRow);
       view.appendChild(el('div', { class: 'row sd-opts' }, [keySel, bpmStep, mixRow]));
       // Akkordraster
@@ -7089,10 +7324,11 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       view.appendChild(grid);
       // Werkzeuge
       var tools = el('div', { class: 'sd-tools' }, [
-        el('button', { class: 'btn sm', onclick: function () { pushUndo(); var id = PH.idea(song.key, song.style, song.ideaN); song.chords = id.chords; song.ideaN = id.n; song.jazz = 0; sel = 0; save(); render(); restartIfPlaying(); hearSel(); } }, [icon('spark'), 'Neue Idee']),
+        el('button', { class: 'btn sm', onclick: function () { pushUndo(); var g = PH.genSong(song.key, song.style, Date.now() % 100000 + 1); song.chords = g.chords; song.jazz = 0; song.melSeed = (song.melSeed || 1) + 1; sel = 0; save(); render(); restartIfPlaying(); toast('Neuer Song: Intro, Strophe, Refrain, Schluss', 2000); } }, [icon('spark'), 'Neuer Song']),
+        el('button', { class: 'btn sm', onclick: function () { song.melSeed = (song.melSeed || 1) + 1; song.mix.mel = true; save(); render(); restartIfPlaying(); toast('Neue Melodie', 1500); } }, ['♪ Neue Melodie']),
         el('button', { class: 'btn sm jazz', onclick: jazzier }, ['🎷 Jazziger']),
         el('button', { class: 'btn sm', 'data-k': 'undo', onclick: function () { if (!undo.length) return; var u = undo.pop(); song.chords = u.chords; song.style = u.style; song.key = u.key; song.jazz = u.jazz; sel = Math.min(sel, song.chords.length - 1); save(); render(); restartIfPlaying(); } }, ['↶ Zurück']),
-        el('button', { class: 'btn sm', onclick: practice }, [icon('music'), 'Als Noten üben'])
+        el('button', { class: 'btn sm primary', onclick: teach }, [icon('music'), 'Beibringen'])
       ]);
       view.appendChild(tools);
       // Klaviatur mit dem gewählten Akkord
@@ -7106,7 +7342,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       view.appendChild(edit);
       root.appendChild(view);
       function save() { song.updated = Date.now(); var i = Studio.songs.indexOf(song); if (i > 0) { Studio.songs.splice(i, 1); Studio.songs.unshift(song); } saveStudio(); }
-      function pushUndo() { undo.push({ chords: song.chords.map(function (c) { return { r: c.r, q: c.q, b: c.b, bass: c.bass }; }), style: song.style, key: { t: song.key.t, minor: song.key.minor }, jazz: song.jazz }); if (undo.length > 40) undo.shift(); }
+      function pushUndo() { undo.push({ chords: song.chords.map(function (c) { return { r: c.r, q: c.q, b: c.b, bass: c.bass, sec: c.sec, fin: c.fin }; }), style: song.style, key: { t: song.key.t, minor: song.key.minor }, jazz: song.jazz }); if (undo.length > 40) undo.shift(); }
       function jazzier() {
         pushUndo(); song.jazz = Math.min(3, (song.jazz || 0) + 1);
         var before = song.chords.length;
@@ -7122,14 +7358,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         keySel.value = song.key.t + (song.key.minor ? 'm' : ''); bpmOut.textContent = song.bpm + ' BPM';
         tools.querySelector('[data-k=undo]').disabled = !undo.length;
         // Takte aufbauen (Akkorde mit 2 Schlägen teilen sich einen Takt)
-        clear(grid); var cell = null, fill = 0, barN = 0;
+        clear(grid); var cell = null, fill = 0, barN = 0, lastSec = null;
         song.chords.forEach(function (c, i) {
+          if ((c.sec || '') !== lastSec && (!cell || fill >= 4)) { lastSec = c.sec || ''; if (lastSec) grid.appendChild(el('div', { class: 'sd-sec sec-' + lastSec, text: lastSec })); }
           if (!cell || fill >= 4) { cell = el('div', { class: 'sd-bar' }, [el('i', { text: String(++barN) })]); grid.appendChild(cell); fill = 0; }
           var b = el('button', { class: 'sd-ch' + (i === sel ? ' sel' : '') + (i === curPlay ? ' now' : '') + (c.b < 4 ? ' half' : ''), 'data-i': i, onclick: function () { sel = i; render(); hearSel(); } }, [
             el('b', { text: PH.chordName(song.key, c) }), el('span', { text: PH.roman(song.key, c) })]);
           cell.appendChild(b); fill += c.b; if (c.b < 4) cell.classList.add('split');
         });
-        grid.appendChild(el('button', { class: 'sd-bar add', 'aria-label': 'Takt hinzufügen', onclick: function () { pushUndo(); var last = song.chords[song.chords.length - 1]; song.chords.push({ r: song.key.t, q: last && /7|9/.test(last.q) ? (song.key.minor ? 'm7' : 'maj7') : (song.key.minor ? 'm' : ''), b: 4 }); sel = song.chords.length - 1; save(); render(); } }, ['+']));
+        grid.appendChild(el('button', { class: 'sd-bar add', 'aria-label': 'Takt hinzufügen', onclick: function () { pushUndo(); var last = song.chords[song.chords.length - 1]; song.chords.push({ r: song.key.t, q: last && /7|9/.test(last.q) ? (song.key.minor ? 'm7' : 'maj7') : (song.key.minor ? 'm' : ''), b: 4, sec: last && last.sec }); sel = song.chords.length - 1; save(); render(); } }, ['+']));
         showSel(); renderEdit();
       }
       function showSel(i) {
@@ -7161,8 +7398,8 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         for (var k = 0; k < 12; k++) (function (r) { var sp = PH.spellRoot(song.key, r); roots.appendChild(el('button', { class: 'chip' + (r === c.r ? ' on' : ''), onclick: function () { setC({ r: r, q: c.q }); } }, [PH.noteName(sp.l, sp.a)])); })(PH.mod(song.key.t + k, 12));
         edit.appendChild(el('div', { class: 'dl', text: 'Grundton' })); edit.appendChild(roots);
         edit.appendChild(el('div', { class: 'row sd-acts' }, [
-          el('button', { class: 'btn sm', onclick: function () { pushUndo(); if (c.b >= 4) { c.b = 2; song.chords.splice(sel + 1, 0, { r: c.r, q: c.q, b: 2 }); } else { var j = song.chords[sel + 1] && song.chords[sel + 1].b < 4 && sel % 1 === 0 ? sel + 1 : sel - 1; if (j >= 0 && song.chords[j] && song.chords[j].b < 4) { c.b = 4; song.chords.splice(j, 1); if (j < sel) sel--; } } save(); render(); } }, [c.b >= 4 ? '½ Takt teilen' : 'Ganzer Takt']),
-          el('button', { class: 'btn sm', onclick: function () { pushUndo(); song.chords.splice(sel + 1, 0, { r: c.r, q: c.q, b: c.b }); sel++; save(); render(); } }, ['Kopieren']),
+          el('button', { class: 'btn sm', onclick: function () { pushUndo(); if (c.b >= 4) { c.b = 2; song.chords.splice(sel + 1, 0, { r: c.r, q: c.q, b: 2, sec: c.sec }); } else { var j = song.chords[sel + 1] && song.chords[sel + 1].b < 4 && sel % 1 === 0 ? sel + 1 : sel - 1; if (j >= 0 && song.chords[j] && song.chords[j].b < 4) { c.b = 4; song.chords.splice(j, 1); if (j < sel) sel--; } } save(); render(); } }, [c.b >= 4 ? '½ Takt teilen' : 'Ganzer Takt']),
+          el('button', { class: 'btn sm', onclick: function () { pushUndo(); song.chords.splice(sel + 1, 0, { r: c.r, q: c.q, b: c.b, sec: c.sec }); sel++; save(); render(); } }, ['Kopieren']),
           el('button', { class: 'btn sm', disabled: sel === 0 ? true : null, onclick: function () { pushUndo(); var t = song.chords[sel - 1]; song.chords[sel - 1] = c; song.chords[sel] = t; sel--; save(); render(); } }, ['←']),
           el('button', { class: 'btn sm', disabled: sel >= song.chords.length - 1 ? true : null, onclick: function () { pushUndo(); var t = song.chords[sel + 1]; song.chords[sel + 1] = c; song.chords[sel] = t; sel++; save(); render(); } }, ['→']),
           el('button', { class: 'btn sm', disabled: song.chords.length <= 1 ? true : null, onclick: function () { pushUndo(); song.chords.splice(sel, 1); sel = Math.max(0, sel - 1); save(); render(); } }, [icon('trash'), 'Löschen'])
@@ -7180,7 +7417,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       function restartIfPlaying() { if (playing) { var at = playing; stop(); start(at.posBeat()); } }
       function start(fromBeat) {
         var c = Snd.resume(); if (!c) return;
-        var A = PH.arrange(song, { bass: song.mix.bass, drums: song.mix.drums }), spb = 60 / song.bpm, bus = Snd.bus(), t0 = c.currentTime + 0.12;
+        var A = PH.arrange(song, { bass: song.mix.bass, drums: song.mix.drums, melody: song.mix.mel }), spb = 60 / song.bpm, bus = Snd.bus(), t0 = c.currentTime + 0.12;
         var startB = fromBeat || 0; if (startB) t0 -= startB * spb;
         var next = 0, loop = 0;
         while (next < A.ev.length && A.ev[next].t < startB) next++;
@@ -7188,19 +7425,21 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         playing.timer = setInterval(function () {
           var horizon = c.currentTime + 0.25;
           for (;;) {
-            if (next >= A.ev.length) { next = 0; loop++; }
+            if (next >= A.ev.length) { if (A.once) { if (!playing.endT) playing.endT = t0 + A.total * spb; break; } next = 0; loop++; }
             var e = A.ev[next], at = t0 + (loop * A.total + e.t) * spb;
             if (at > horizon) break;
             next++;
             if (at < c.currentTime - 0.05) continue;
             if (e.drum) Kit.drum(c, bus, e.drum, at, e.v);
             else if (e.part === 'bass') Kit.bass(c, bus, e.m, at, e.d * spb, e.v);
-            else if (song.mix.piano) Snd.play(e.m, at, Math.max(0.12, e.d * spb), e.v, bus);
+            else if (e.part === 'mel') Snd.play(e.m, at, Math.max(0.12, e.d * spb), e.v, bus);
+            else if (song.mix.piano) Snd.play(e.m, at + (e.roll || 0) * 0.011, Math.max(0.12, e.d * spb), e.v, bus);
           }
         }, 30);
         clear(playBtn); playBtn.appendChild(icon('stop', true)); playBtn.classList.add('on');
         (function frame() {
           if (!playing) return;
+          if (playing.endT && c.currentTime > playing.endT) { stop(); return; }
           var pos = ((c.currentTime - t0) / spb), b = ((pos % A.total) + A.total) % A.total, ci = -1;
           if (pos >= 0) for (var k = 0; k < A.chords.length; k++) if (b >= A.chords[k].t - 1e-6) ci = A.chords[k].i;
           if (ci !== curPlay) {
@@ -7218,14 +7457,26 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
         Array.prototype.forEach.call(grid.querySelectorAll('.sd-ch.now'), function (x) { x.classList.remove('now'); });
         showSel();
       }
-      function practice() {
+      function teach() {
         stop();
-        var abc = PH.toAbc(song), p = PC.parseABC(abc);
+        overlay(function (box, close) {
+          box.classList.add('teach-box');
+          box.appendChild(el('h2', { text: '„' + song.title + '“ lernen' }));
+          box.appendChild(el('p', { class: 'hint', text: 'Tasto schreibt dir den Song als Noten auf, die Akkordnamen stehen darüber. Dann führt dich der Lernweg Abschnitt für Abschnitt: erst rechte Hand, dann linke Hand, dann beide – Tasto hört zu und geht erst weiter, wenn es sitzt.' }));
+          box.appendChild(el('button', { class: 'teach-opt', onclick: function () { close(); practice('chords'); } }, [el('b', { text: '1 · Die Akkorde' }), el('span', { text: 'Erst die Begleitung: links Bass, rechts die vollen Akkordgriffe. Damit kannst du den Song schon begleiten.' })]));
+          box.appendChild(el('button', { class: 'teach-opt', onclick: function () { close(); practice('song'); } }, [el('b', { text: '2 · Der ganze Song' }), el('span', { text: 'Melodie oben in der rechten Hand, beim Akkordwechsel mit Akkord darunter – links die Begleitung. So klingt es wie vorgespielt.' })]));
+          box.appendChild(el('div', { class: 'acts' }, [el('button', { class: 'btn', text: 'Abbrechen', onclick: close })]));
+        });
+      }
+      function practice(mode) {
+        stop();
+        var abc = PH.toAbc(song, mode), p = PC.parseABC(abc);
         if (!p.ok) { toast('Die Noten konnten nicht erzeugt werden.', 3000); return; }
-        var piece = { id: song.pieceId || uid(), title: song.title, sub: 'Eigener Song · ' + PH.STYLES[song.style].name + ' · ' + PH.keyName(song.key), abc: abc, scans: [], created: Date.now(), pct: 100, hands: 'RL' };
+        song.pieceIds = song.pieceIds || {}; if (song.pieceId && !song.pieceIds.chords) song.pieceIds.chords = song.pieceId;
+        var piece = { id: song.pieceIds[mode] || uid(), title: song.title + (mode === 'chords' ? ' – Akkorde' : ''), sub: 'Eigener Song · ' + PH.STYLES[song.style].name + ' · ' + PH.keyName(song.key), abc: abc, scans: [], created: Date.now(), pct: mode === 'song' ? 70 : 100, hands: 'RL' };
         Store.get(piece.id).then(function (old) {
-          if (old) { piece.created = old.created; piece.stats = old.stats; }
-          song.pieceId = piece.id; save();
+          if (old) { piece.created = old.created; piece.stats = old.stats; if (old.abc === piece.abc) piece.path = old.path; }
+          song.pieceIds[mode] = piece.id; save();
           return Store.put(piece);
         }).then(function () { toast('In deiner Bibliothek gespeichert – viel Spaß beim Üben!', 2500); showPractice(piece.id); });
       }
