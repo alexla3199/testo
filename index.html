@@ -584,6 +584,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px;
 .teach-opt b { font: 700 16px var(--f-title); }
 .teach-opt span { font-size: 13px; color: var(--muted); line-height: 1.4; }
 .score-svg .csym { fill: #6b3fd6; }
+.lib-tile .lt-k { font-size: 12px; color: #ffc56b; line-height: 1.35; }
 
 </style>
 <div id="app"></div>
@@ -4235,6 +4236,20 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
     { id: 'epic', name: 'Hymne', style: 'pop', d: 'Große Gefühle, Stadion-Refrain', key: { t: 2, minor: false }, p: ['VI:m', 'IV:', 'I:', 'V:', 'VI:m', 'IV:', 'I:', 'V:sus4+V:'] },
     { id: 'soulful', name: 'Sonntagmorgen', style: 'neosoul', d: 'Satte Septimen, entspannter Groove', key: { t: 1, minor: false }, p: ['II:m9', 'III:m7', 'IV:maj9', 'V:9sus4', 'II:m9', 'III:m7+VI:7#9', 'II:m9', 'V:13'] }
   ];
+  // Pop-Klassiker: die berühmten Akkordfolgen, auf denen unzählige Hits beruhen (nur Akkorde – Melodie und Text sind Tastos eigene)
+  var HITS = [
+    { id: 'axis', name: 'Die Hit-Folge', style: 'pop', d: 'I – V – vi – IV: die erfolgreichste Akkordfolge der Popgeschichte', known: 'Let It Be (Strophe), Someone Like You, With or Without You, Don’t Stop Believin’', key: { t: 0, minor: false }, p: ['I:', 'V:', 'VI:m', 'IV:'] },
+    { id: 'sadpop', name: 'Melancholie-Pop', style: 'pop', d: 'vi – IV – I – V: dieselben Akkorde, aber in Moll gedacht', known: 'Zombie (The Cranberries) und viele Emo- und Rock-Balladen', key: { t: 9, minor: true }, p: ['I:m', 'bVI:', 'bIII:', 'bVII:'] },
+    { id: 'fifties', name: '50er-Jahre-Folge', style: 'ballad', d: 'I – vi – IV – V: Doo-Wop, Schmusesongs, Evergreens', known: 'Stand By Me, Every Breath You Take, Earth Angel', key: { t: 7, minor: false }, p: ['I:', 'VI:m', 'IV:', 'V:'] },
+    { id: 'canon', name: 'Kanon-Folge', style: 'ballad', d: 'I – V – vi – iii – IV – I – IV – V: die Mutter aller Balladen', known: 'Pachelbels Kanon in D, Basket Case (Green Day)', key: { t: 2, minor: false }, p: ['I:', 'V:', 'VI:m', 'III:m', 'IV:', 'I:', 'IV:', 'V:'] },
+    { id: 'creep', name: 'Gänsehaut-Wechsel', style: 'ballad', d: 'I – III – IV – iv: der Dur-Akkord auf der Drei und das traurige Moll am Ende', known: 'Creep (Radiohead)', key: { t: 7, minor: false }, p: ['I:', 'III:', 'IV:', 'IV:m'] },
+    { id: 'andal', name: 'Andalusische Kadenz', style: 'pop', d: 'i – bVII – bVI – V: spanisch, dramatisch, absteigend', known: 'Hit the Road Jack, viele Flamenco- und Surf-Songs', key: { t: 9, minor: true }, p: ['I:m', 'bVII:', 'bVI:', 'V:'] },
+    { id: 'mixo', name: 'Rock-Hymne', style: 'pop', d: 'I – bVII – IV – I: der Klang großer Rock-Momente', known: 'Sweet Child O’ Mine (Strophe), das Finale von Hey Jude', key: { t: 2, minor: false }, p: ['I:', 'bVII:', 'IV:', 'I:'] },
+    { id: 'blues', name: '12-Takt-Blues', style: 'jazz', d: 'Das Fundament von Rock ’n’ Roll, Blues und Boogie', known: 'Johnny B. Goode, Hound Dog, Rock Around the Clock', key: { t: 0, minor: false }, p: ['I:7', 'IV:7', 'I:7', 'I:7', 'IV:7', 'IV:7', 'I:7', 'I:7', 'V:7', 'IV:7', 'I:7', 'V:7'] },
+    { id: 'pop4', name: 'Sommer-Pop', style: 'pop', d: 'I – IV – vi – V: leicht, hell, gute Laune', known: 'unzählige Radio-Hits und Sommer-Songs', key: { t: 5, minor: false }, p: ['I:', 'IV:', 'VI:m', 'V:'] },
+    { id: 'twoofus2', name: 'Soul-Abstieg', style: 'neosoul', d: '♭VImaj7 – V7 – i – iv – ♭VII7: elegant, absteigend', known: 'Just the Two of Us und viele Neo-Soul- und R&B-Songs', key: { t: 4, minor: true }, p: ['bVI:maj7', 'V:7', 'I:m7', 'IV:m7+bVII:7'] }
+  ];
+  HITS.forEach(function (h) { h.hit = true; });
   function fromLib(e) { return fromIdea(e.key, e.p); }
   function libSong(e) { var p = fromLib(e); return buildSong(e.key, e.style, p, p); }
 
@@ -4429,7 +4444,7 @@ window.TASTO_LOGO = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 102
   return {
     Q: Q, QLIST: QLIST, STYLES: STYLES, IDEAS: IDEAS, sym: sym, keyName: keyName, keyAbc: keyAbc, tonic: tonic, noteName: noteName,
     spellRoot: spellRoot, tones: tones, chordName: chordName, roman: roman, diatonic: diatonic, colors: colors,
-    voicing: voicing, voiceAll: voiceAll, idea: idea, fromIdea: fromIdea, jazzify: jazzify, arrange: arrange, bassLine: bassLine, toAbc: toAbc, label: label, melody: melody, genSong: genSong, LIB: LIB, fromLib: fromLib, libSong: libSong, buildSong: buildSong, sections: sections, rng: rng, isMinorQ: isMinorQ, mod: mod
+    voicing: voicing, voiceAll: voiceAll, idea: idea, fromIdea: fromIdea, jazzify: jazzify, arrange: arrange, bassLine: bassLine, toAbc: toAbc, label: label, melody: melody, genSong: genSong, LIB: LIB, HITS: HITS, fromLib: fromLib, libSong: libSong, buildSong: buildSong, sections: sections, rng: rng, isMinorQ: isMinorQ, mod: mod
   };
 });
 
@@ -5075,7 +5090,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
   if (!S.v3) { S.kbSize = 'fit'; S.optsOpen = false; S.showStatus = true; S.v3 = true; }
   function saveSettings() { try { localStorage.setItem('ks-settings', JSON.stringify(S)); } catch (e) { /* ignorieren */ } }
 
-  var VERSION = '7.0', VERSION_DATE = '01.11.2026';
+  var VERSION = '7.1', VERSION_DATE = '01.11.2026';
   /* Gelernte Klangwerte pro Ton (aus Einstellen, Anlernen und dem Spielen selbst) */
   var Learn = {};
   try { Learn = JSON.parse(localStorage.getItem('ks-learn') || '{}') || {}; } catch (e) { Learn = {}; }
@@ -5931,7 +5946,7 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       });
       if (!S.introSeen) setTimeout(showIntro, 300);
       else if (!S.cal && !setupAsked) { setupAsked = true; setTimeout(setupPrompt, 350); }
-      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Version ' + VERSION + ': Studio baut ganze Songs mit Melodie – und bringt sie dir bei', 5000); }, 400);
+      if (S.introSeen && S.lastVersion !== VERSION) setTimeout(function () { toast('Version ' + VERSION + ': Neu im Studio – Pop-Klassiker-Akkordfolgen', 5000); }, 400);
       if (S.lastVersion !== VERSION) { S.lastVersion = VERSION; saveSettings(); }
     });
   }
@@ -7233,6 +7248,15 @@ if (typeof module === 'object' && module.exports) module.exports = SAMPLES;
       view.appendChild(el('h2', { class: 'sh-h', text: 'Neuer Song' }));
       view.appendChild(el('p', { class: 'hint sh-sub', text: 'Tasto baut dir einen ganzen Song: Intro, Strophe, Refrain und Schluss – mit Melodie, vollen Akkorden, Bass und Beat.' }));
       view.appendChild(grid);
+      view.appendChild(el('h2', { class: 'sh-h', text: 'Pop-Klassiker' }));
+      view.appendChild(el('p', { class: 'hint sh-sub', text: 'Die berühmten Akkordfolgen hinter unzähligen Hits. Tasto baut daraus einen eigenen Song mit eigener Melodie – die Akkorde kannst du dann in jedem dieser Lieder wiederfinden.' }));
+      var hitEl = el('div', { class: 'lib-grid' });
+      PH.HITS.forEach(function (e) {
+        var names = PH.fromLib(e).slice(0, 4).map(function (c) { return PH.chordName(e.key, c); }).join(' · ');
+        hitEl.appendChild(el('button', { class: 'lib-tile hit', onclick: function () { Snd.resume(); editSong(newSong(null, null, e)); } }, [
+          el('span', { class: 'lt-st st-' + e.style, text: PH.STYLES[e.style].name }), el('b', { text: e.name }), el('span', { class: 'lt-d', text: e.d }), el('span', { class: 'lt-k', text: 'Bekannt aus: ' + e.known }), el('span', { class: 'lt-c', text: names + (PH.fromLib(e).length > 4 ? ' …' : '') })]));
+      });
+      view.appendChild(hitEl);
       view.appendChild(el('h2', { class: 'sh-h', text: 'Besonders schöne Akkordfolgen' }));
       var libEl = el('div', { class: 'lib-grid' });
       PH.LIB.forEach(function (e) {
